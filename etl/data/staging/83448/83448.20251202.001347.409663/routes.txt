@@ -1,0 +1,2 @@
+route_id,agency_id,route_short_name,route_long_name,route_desc,route_type,route_url,route_color,route_text_color
+SUD_IV15,5241,"SUD_IV15","SUD_IV15",,100,,999999,FFFFFF
