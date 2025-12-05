@@ -1,6 +1,5 @@
 import sys
 sys.path.append("/opt/airflow")
-
 from airflow import DAG
 import pendulum
 from scripts.extract_gtfs_data_gouv import fetch_zip_urls_task, download_extract_task
@@ -12,10 +11,9 @@ with DAG(
     catchup=False,
 ):
 
-    BASE_URL = "https://transport.data.gouv.fr/api/datasets/685baf2be31192d0ec7bcdc9"
+    BASE_URL = "https://transport.data.gouv.fr/api/datasets/563dd039b5950814b0588710"
 
     urls_task = fetch_zip_urls_task(BASE_URL)
     download_task = download_extract_task(urls_task)
 
-    # == Dépendances ==
     urls_task >> download_task
