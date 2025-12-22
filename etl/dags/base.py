@@ -34,11 +34,20 @@ def _parse_urls(value: str) -> List[str]:
 
 @dag(
     dag_id="gtfs_full_etl",
-    schedule="@daily",
-    start_date=pendulum.yesterday(),
+    schedule="@once",
+    start_date=pendulum.now('UTC'),
+    is_paused_upon_creation=False,
     catchup=False,
     tags=["gtfs", "etl"]
 )
+
+# @dag(
+#     dag_id="gtfs_full_etl",
+#     schedule="@daily",
+#     start_date=pendulum.now('UTC').subtract(days=1),
+#     catchup=True,
+#     tags=["gtfs", "etl"]
+# )
 def gtfs_full_etl():
     # URLs par défaut si aucune Variable n'est définie
     default_urls = [

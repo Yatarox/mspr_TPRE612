@@ -9,3 +9,5 @@ services:
       - ./scripts:/opt/airflow/scripts
       - ./data:/opt/airflow/data
       - ./logs:/opt/airflow/logs
+    environment:
+      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=False
