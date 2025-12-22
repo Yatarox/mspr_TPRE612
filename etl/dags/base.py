@@ -1,81 +1,88 @@
-# from airflow.decorators import dag, task
-# from airflow.models import Variable
-# import pendulum
-# import requests
-# import os
-# import zipfile
-# from typing import List, Dict
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-# # -------------------------------------------------------------
-# # Fonctions utilitaires
-# # -------------------------------------------------------------
+from airflow.decorators import dag, task
+from airflow.models import Variable
+import pendulum
+from typing import List
 
-# def get_zip_url(base_url: str) -> Dict[str, str]:
-#     data = {}
-#     response = requests.get(base_url)
-#     response.raise_for_status()
-#     json_data = response.json()
+from scripts.extract_gtfs_data_gouv_script import get_zip_url, download_and_unzip
+from scripts.transform_gtfs_data import transform_gtfs
 
-#     for item in json_data.get("history", []):
-#         payload = item.get("payload", {})
-#         url = payload.get("permanent_url")
-#         filename = payload.get("filename")
-#         if url and filename:
-#             data[url] = filename
+# Optionnel: charge la fonction de Load si dispo
+try:
+    from scripts.load_gtfs import load_gtfs
+except Exception:
+    load_gtfs = None
 
-#     if not data:
-#         raise ValueError("No ZIP URLs found from API")
+def _parse_urls(value: str) -> List[str]:
+    """
+    Accepte:
+      - JSON list: ["https://...","https://..."]
+      - CSV: https://..., https://...
+      - multi-lignes
+    """
+    import json
+    v = (value or "").strip()
+    if not v:
+        return []
+    if v.startswith("["):
+        return [u.strip() for u in json.loads(v) if u and isinstance(u, str)]
+    parts = [p.strip() for p in v.replace("\n", ",").split(",")]
+    return [p for p in parts if p]
 
-#     return data
+@dag(
+    dag_id="gtfs_full_etl",
+    schedule="@daily",
+    start_date=pendulum.yesterday(),
+    catchup=False,
+    tags=["gtfs", "etl"]
+)
+def gtfs_full_etl():
+    # URLs par défaut si aucune Variable n'est définie
+    default_urls = [
+        "https://transport.data.gouv.fr/api/datasets/563dd039b5950814b0588710",
+        "https://transport.data.gouv.fr/api/datasets/5f9008f1af9cf0bed8270cde",
+    ]
 
-# def download_and_unzip(data: Dict[str, str], download_dir: str, extract_dir: str):
-#     for url, filename in data.items():
-#         file_path = os.path.join(download_dir, filename)
-#         os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    urls_str = Variable.get("gtfs_base_urls", default_var=None)
+    if urls_str:
+        BASE_URLS = _parse_urls(urls_str)
+    else:
+        single = Variable.get("gtfs_base_url", default_var=None)
+        BASE_URLS = [single] if single else default_urls
 
-#         response = requests.get(url)
-#         response.raise_for_status()
+    RAW_DIR = Variable.get("gtfs_raw_dir", default_var="/opt/airflow/data/raw")
+    STAGING_DIR = Variable.get("gtfs_staging_dir", default_var="/opt/airflow/data/staging")
+    PROCESSED_DIR = Variable.get("gtfs_processed_dir", default_var="/opt/airflow/data/processed")
 
-#         with open(file_path, "wb") as file:
-#             file.write(response.content)
+    @task
+    def extract():
+        all_files = {}
+        for base_url in BASE_URLS:
+            data = get_zip_url(base_url)
+            all_files.update(data)
+        download_and_unzip(all_files, RAW_DIR, STAGING_DIR)
 
-#         extract_path = os.path.join(extract_dir, os.path.splitext(filename)[0])
-#         os.makedirs(extract_path, exist_ok=True)
+    @task
+    def transform():
+        # Ecrit processed/<dataset_id>/trips_summary.csv
+        return transform_gtfs(STAGING_DIR, PROCESSED_DIR)
 
-#         with zipfile.ZipFile(file_path, "r") as zip_ref:
-#             zip_ref.extractall(extract_path)
+    @task
+    def load():
+        if load_gtfs is None:
+            raise RuntimeError("Ajoute une fonction `load_gtfs` dans scripts/load_gtfs.py (ou adapte l'import).")
+        conn_id = Variable.get("gtfs_db_conn_id", default_var=None)
+        load_gtfs(PROCESSED_DIR, conn_id)
 
-# # -------------------------------------------------------------
-# # DAG
-# # -------------------------------------------------------------
+    e = extract()
+    t = transform()
+    e >> t
 
-# @dag(
-#     dag_id="gtfs_extraction_airflow_native",
-#     schedule="@daily",
-#     start_date=pendulum.yesterday(),
-#     catchup=False,
-#     tags=["gtfs", "data"]
-# )
-# def gtfs_extraction():
-#     # On peut récupérer l'URL depuis une Variable Airflow
-#     BASE_URL = Variable.get(
-#         "gtfs_base_url",
-#         default_var="https://transport.data.gouv.fr/api/datasets/563dd039b5950814b0588710"
-#     )
-#     RAW_DIR = Variable.get("gtfs_raw_dir", default_var="/opt/airflow/data/raw")
-#     STAGING_DIR = Variable.get("gtfs_staging_dir", default_var="/opt/airflow/data/staging")
+    if load_gtfs is not None:
+        l = load()
+        t >> l
 
-#     @task
-#     def fetch_urls(base_url: str) -> List[str]:
-#         data = get_zip_url(base_url)
-#         return list(data.keys())
-
-#     @task
-#     def download_extract(urls: List[str], raw_dir: str, staging_dir: str):
-#         data = {url: os.path.basename(url) for url in urls}
-#         download_and_unzip(data, raw_dir, staging_dir)
-
-#     urls = fetch_urls(BASE_URL)
-#     download_extract(urls, RAW_DIR, STAGING_DIR)
-
-# dag_instance = gtfs_extraction()
+dag_instance = gtfs_full_etl()
