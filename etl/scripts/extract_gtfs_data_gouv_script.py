@@ -15,9 +15,10 @@ def get_zip_url(base_url: str) -> Dict[str, str]:
 
     for item in json_data.get("history", []):
         payload = item.get("payload", {})
+        format = payload.get("format")
         url = payload.get("permanent_url")
         filename = payload.get("filename")
-        if url and filename:
+        if url and filename and format == "GTFS":
             data[url] = filename
 
     if not data:

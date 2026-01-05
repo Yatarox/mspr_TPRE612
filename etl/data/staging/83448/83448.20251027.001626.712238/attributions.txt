@@ -1,3 +1,0 @@
-Route_id,organization_name,is_operator
-SUD_IV15, Transdev,1
-SUD_MAS, Transdev,1
