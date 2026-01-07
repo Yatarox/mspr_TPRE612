@@ -136,3 +136,31 @@ WHERE load_id = @LOAD_ID;
 
 -- Total facts
 SELECT COUNT(*) AS fact_rows FROM fact_trip_summary;
+
+
+/* =========================================================
+   9) VUE D'API
+   ========================================================= */
+
+CREATE VIEW v_api_trips AS
+SELECT
+    f.fact_id,
+    tr.trip_id,
+    ro.route_name,
+    ag.agency_name,
+    st.service_type,
+    loc_origin.stop_name AS origin,
+    loc_dest.stop_name AS destination,
+    t_dep.time_value AS departure_time,
+    t_arr.time_value AS arrival_time,
+    f.distance_km,
+    f.duration_h
+FROM fact_trip_summary f
+JOIN dim_trip tr ON f.trip_sk = tr.trip_sk
+JOIN dim_route ro ON f.route_sk = ro.route_sk
+JOIN dim_agency ag ON f.agency_sk = ag.agency_sk
+JOIN dim_service_type st ON f.service_sk = st.service_sk
+JOIN dim_location loc_origin ON f.origin_location_sk = loc_origin.location_sk
+JOIN dim_location loc_dest ON f.destination_location_sk = loc_dest.location_sk
+JOIN dim_time t_dep ON f.departure_time_sk = t_dep.time_sk
+JOIN dim_time t_arr ON f.arrival_time_sk = t_arr.time_sk;

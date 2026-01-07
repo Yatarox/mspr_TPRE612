@@ -1,7 +1,8 @@
 version: '3.8'
 
-##services:
-  #db:
+#########################################################################################
+services:
+  db:
     image: postgres:15-alpine  # Utiliser une image PostgreSQL
     container_name: obrail_db
     restart: always
@@ -18,3 +19,5 @@ version: '3.8'
 volumes:
   postgres_data:
     # Ce volume assure que vos données ne sont pas perdues si le conteneur s'arrêt
+
+#########################################################################################
