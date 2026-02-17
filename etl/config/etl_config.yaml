@@ -1,0 +1,25 @@
+extract:
+  max_retries: 3
+  timeout_seconds: 300
+  force_download: false
+  keep_latest_downloads: 2
+
+transform:
+  chunk_size: 5000
+  max_workers: 4
+  skip_distance_threshold: 1000000
+  memory_limit_mb: 4096
+
+load:
+  batch_size: 1000
+  cache_size: 10000
+  validate_data: true
+  max_errors_per_file: 100
+
+database:
+  connection_timeout: 30
+  query_timeout: 300
+
+logging:
+  level: INFO
+  structured: true

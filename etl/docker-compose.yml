@@ -1,0 +1,24 @@
+version: "3.8"
+
+services:
+  airflowservice:
+    build: .
+    container_name: rail-airflow
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./scripts:/opt/airflow/scripts
+      - ./data:/opt/airflow/data
+      - ./logs:/opt/airflow/logs
+    environment:
+      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=False
+      - AIRFLOW_CONN_MYSQL_DEFAULT=mysql://root:root@mysql:3306/rail_dw
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - rail-network
+    restart: unless-stopped
+
+  
