@@ -1,0 +1,23 @@
+version: '3.8'
+
+#########################################################################################
+services:
+  db:
+    image: postgres:15-alpine  # Utiliser une image PostgreSQL
+    container_name: obrail_db
+    restart: always
+    environment:
+      POSTGRES_USER: admin_obrail
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: obrail_data
+    ports:
+      - "5432:5432" # Expose le port 5432 de votre machine vers le conteneur
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data # Persistance des données
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql # Script d'initialisation
+
+volumes:
+  postgres_data:
+    # Ce volume assure que vos données ne sont pas perdues si le conteneur s'arrêt
+
+#########################################################################################
