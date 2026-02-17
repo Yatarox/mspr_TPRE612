@@ -1,0 +1,92 @@
+version: "3.8"
+
+services:
+  mysql:
+    build: ./database
+    container_name: rail-mysql
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=root
+      - MYSQL_DATABASE=rail_dw
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - rail-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  airflowservice:
+    build: ./etl
+    container_name: rail-airflow
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./etl/dags:/opt/airflow/dags
+      - ./etl/scripts:/opt/airflow/scripts
+      - ./etl/data:/opt/airflow/data
+      - ./etl/logs:/opt/airflow/logs
+    environment:
+      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=False
+      - AIRFLOW_CONN_MYSQL_DEFAULT=mysql://root:root@mysql:3306/rail_dw
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - rail-network
+    restart: unless-stopped
+
+  api:
+    build: ./api
+    container_name: rail-api
+    ports:
+      - "8000:8000"
+    environment:
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=root
+      - MYSQL_DATABASE=rail_dw
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - rail-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+  dashboard:
+    build: ./rail-dashboard
+    container_name: rail-dashboard
+    ports:
+      - "3000:80"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    depends_on:
+      - api
+    networks:
+      - rail-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  mysql-data:
+    driver: local
+
+networks:
+  rail-network:
+    driver: bridge
+    name: rail-network
