@@ -28,3 +28,9 @@ jobs:
       - name: Run tests
         run: |
           docker run --rm mspr-api pytest -v
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@v2
+        with:
+          projectBaseDir: ./api
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
