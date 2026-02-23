@@ -1,3 +1,6 @@
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 from scripts.load_gtfs import load_gtfs
 from scripts.transform_gtfs_data import transform_gtfs
 from scripts.extract_gtfs_data_gouv_script import (
@@ -14,9 +17,7 @@ import pendulum
 from airflow.operators.python import get_current_context
 from airflow.models import Variable
 from airflow.decorators import dag, task
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
 
 
 logger = logging.getLogger(__name__)
