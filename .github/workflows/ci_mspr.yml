@@ -18,6 +18,10 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r ./api/requirements.txt
+      - name: Check dependencies for vulnerabilities
+        run: |
+          pip install pip-audit
+          pip-audit -r ./api/requirements.txt
       - name: Build Docker image
         run: |
           docker build -t mspr-api ./api
