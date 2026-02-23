@@ -18,6 +18,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copier le code source
 COPY src/ ./src/
+COPY tests/ ./tests/
 
 # Ajouter le répertoire src au PYTHONPATH
 ENV PYTHONPATH=/app/src
