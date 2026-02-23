@@ -30,13 +30,17 @@ async def get_stats_by_traction():
 
 
 @router.get("/stats/by-agency")
-async def get_stats_by_agency(limit: int = Query(default=10, ge=1, le=100)):
+async def get_stats_by_agency(
+    limit: int = Query(default=10, ge=1, le=100)
+):
     """Top agences par nombre de trajets"""
     return await dashboard_service.get_stats_by_agency(limit)
 
 
 @router.get("/emissions/by-route")
-async def get_emissions_by_route(limit: int = Query(default=20, ge=1, le=100)):
+async def get_emissions_by_route(
+    limit: int = Query(default=20, ge=1, le=100)
+):
     """Routes les plus émettrices"""
     return await dashboard_service.get_emissions_by_route(limit)
 
