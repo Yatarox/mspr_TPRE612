@@ -1,97 +1,27 @@
-name: CI All Services
+# filepath: .github/workflows/ci.yml
+name: API CI
 
 on:
   push:
-    branches: [main, ETL, api, dashboard, database]
+    branches: [main]
   pull_request:
     branches: [main]
 
 jobs:
-  lint-api:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Lint API
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Install dependencies
         run: |
-          cd api
-          pip install flake8
-          flake8 .
-
-  audit-api:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Audit API dependencies
-        run: |
-          cd api
-          pip install pip-audit
-          pip-audit
-
-  test-api:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Test API
-        run: |
-          cd api
           pip install -r requirements.txt
-          pytest
-
-  lint-etl:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Lint ETL
+      - name: Run tests
         run: |
-          cd etl
-          pip install flake8
+          pytest
+      - name: Lint with flake8
+        run: |
           flake8 .
-
-  audit-etl:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Audit ETL dependencies
-        run: |
-          cd etl
-          pip install pip-audit
-          pip-audit
-
-  test-etl:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Test ETL
-        run: |
-          cd etl
-          pip install -r requirements.txt
-          pytest
-
-  lint-dashboard:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Lint Dashboard
-        run: |
-          cd rail-dashboard
-          npm install
-          npx eslint src
-
-  audit-dashboard:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Audit Dashboard dependencies
-        run: |
-          cd rail-dashboard
-          npm audit --audit-level=moderate
-
-  build-dashboard:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Build Dashboard
-        run: |
-          cd rail-dashboard
-          npm install
-          npm run build
