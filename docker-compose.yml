@@ -25,11 +25,6 @@ services:
     container_name: rail-airflow
     ports:
       - "8080:8080"
-    volumes:
-      - ./etl/dags:/opt/airflow/dags
-      - ./etl/scripts:/opt/airflow/scripts
-      - ./etl/data:/opt/airflow/data
-      - ./etl/logs:/opt/airflow/logs
     environment:
       - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=False
       - AIRFLOW_CONN_MYSQL_DEFAULT=mysql://root:root@mysql:3306/rail_dw
