@@ -24,7 +24,7 @@ jobs:
       - name: 🧹 Lint code with ruff
         run: |
           pip install ruff
-          ruff ./api/src
+          ruff check ./api/src
 
       - name: 🔒 Check dependencies for vulnerabilities
         run: |
