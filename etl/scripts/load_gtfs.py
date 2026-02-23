@@ -18,6 +18,7 @@ logger.info(f"[BOOT] {VERSION}")
 # Dimension Loaders (avec cache et stats)
 # ============================================================
 
+
 class DimensionCache:
     def __init__(self, max_size: int = 10_000):
         self.cache: Dict[str, Any] = {}
@@ -42,7 +43,13 @@ class DimensionCache:
     def stats(self):
         total = self.hits + self.misses
         hit_rate = (self.hits / total * 100) if total else 0
-        logger.info(f"Cache stats - hits:{self.hits} misses:{self.misses} hit_rate:{hit_rate:.1f}% size:{len(self.cache)}")
+        logger.info(
+            f"Cache stats - hits:{
+                self.hits} misses:{
+                self.misses} hit_rate:{
+                hit_rate:.1f}% size:{
+                    len(
+                        self.cache)}")
 
     def clear(self):
         self.stats()
@@ -50,13 +57,18 @@ class DimensionCache:
         self.hits = 0
         self.misses = 0
 
+
 dim_cache = DimensionCache()
 
 # ============================================================
 # Helpers
 # ============================================================
 
-def get_column_max_length(hook: MySqlHook, table: str, column: str) -> Optional[int]:
+
+def get_column_max_length(
+        hook: MySqlHook,
+        table: str,
+        column: str) -> Optional[int]:
     try:
         row = hook.get_first(
             """
@@ -74,14 +86,26 @@ def get_column_max_length(hook: MySqlHook, table: str, column: str) -> Optional[
         pass
     return None
 
+
 def get_staging_country_limits(hook: MySqlHook) -> Tuple[int, int]:
     default_len = 30
-    o_len = get_column_max_length(hook, "stg_trips_summary", "origin_country") or default_len
-    d_len = get_column_max_length(hook, "stg_trips_summary", "destination_country") or default_len
-    logger.info(f"Staging country column widths -> origin_country:{o_len}, destination_country:{d_len}")
+    o_len = get_column_max_length(
+        hook,
+        "stg_trips_summary",
+        "origin_country") or default_len
+    d_len = get_column_max_length(
+        hook,
+        "stg_trips_summary",
+        "destination_country") or default_len
+    logger.info(
+        f"Staging country column widths -> origin_country:{o_len}, destination_country:{d_len}")
     return o_len, d_len
 
-def sanitize_country_for_staging(value: Any, max_len: int, field_name: str) -> Optional[str]:
+
+def sanitize_country_for_staging(
+        value: Any,
+        max_len: int,
+        field_name: str) -> Optional[str]:
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return None
     s = str(value).strip()
@@ -93,8 +117,13 @@ def sanitize_country_for_staging(value: Any, max_len: int, field_name: str) -> O
     if up in {"UNKNOWN", "UNKN", "UNK", "NA", "N/A", "NONE", "NULL"}:
         return None
 
-    if re.match(r"^\d{4}-\d{2}-\d{2}", up) or re.match(r"^\d{2}/\d{2}/\d{4}", up):
-        logger.warning(f"[country] Date-like detected in {field_name}: '{s}' -> NULL")
+    if re.match(
+        r"^\d{4}-\d{2}-\d{2}",
+        up) or re.match(
+        r"^\d{2}/\d{2}/\d{4}",
+            up):
+        logger.warning(
+            f"[country] Date-like detected in {field_name}: '{s}' -> NULL")
         return None
 
     up = re.sub(r"[^A-Z]", "", up)
@@ -102,7 +131,8 @@ def sanitize_country_for_staging(value: Any, max_len: int, field_name: str) -> O
         return None
 
     if len(up) > max_len:
-        logger.warning(f"[country] Too long for {field_name} (len={len(up)}, max={max_len}) -> truncated: '{up[:max_len]}'")
+        logger.warning(
+            f"[country] Too long for {field_name} (len={len(up)}, max={max_len}) -> truncated: '{up[:max_len]}'")
         up = up[:max_len]
 
     return up
@@ -111,83 +141,152 @@ def sanitize_country_for_staging(value: Any, max_len: int, field_name: str) -> O
 # Dimensions (row-wise fallback, conservées pour compat)
 # ============================================================
 
+
 def load_dim_dataset(hook, dataset_id: int) -> int:
     key = f"dataset_{dataset_id}"
     cached = dim_cache.get(key)
     if cached:
         return cached
-    row = hook.get_first("SELECT dataset_sk FROM dim_dataset WHERE dataset_id = %s", parameters=(dataset_id,))
+    row = hook.get_first(
+        "SELECT dataset_sk FROM dim_dataset WHERE dataset_id = %s",
+        parameters=(
+            dataset_id,
+        ))
     if row:
-        dim_cache.set(key, row[0]); return row[0]
-    hook.run("INSERT INTO dim_dataset (dataset_id) VALUES (%s) ON DUPLICATE KEY UPDATE dataset_id=VALUES(dataset_id)", parameters=(dataset_id,))
-    row = hook.get_first("SELECT dataset_sk FROM dim_dataset WHERE dataset_id = %s", parameters=(dataset_id,))
+        dim_cache.set(key, row[0])
+        return row[0]
+    hook.run(
+        "INSERT INTO dim_dataset (dataset_id) VALUES (%s) ON DUPLICATE KEY UPDATE dataset_id=VALUES(dataset_id)",
+        parameters=(
+            dataset_id,
+        ))
+    row = hook.get_first(
+        "SELECT dataset_sk FROM dim_dataset WHERE dataset_id = %s",
+        parameters=(
+            dataset_id,
+        ))
     if row:
-        dim_cache.set(key, row[0]); return row[0]
+        dim_cache.set(key, row[0])
+        return row[0]
     raise AirflowException(f"Cannot load dataset dimension for {dataset_id}")
+
 
 def load_dim_trip(hook, trip_id: str) -> int:
     key = f"trip_{trip_id}"
     cached = dim_cache.get(key)
     if cached:
         return cached
-    row = hook.get_first("SELECT trip_sk FROM dim_trip WHERE trip_id = %s", parameters=(trip_id,))
+    row = hook.get_first(
+        "SELECT trip_sk FROM dim_trip WHERE trip_id = %s",
+        parameters=(
+            trip_id,
+        ))
     if row:
-        dim_cache.set(key, row[0]); return row[0]
-    hook.run("INSERT INTO dim_trip (trip_id) VALUES (%s) ON DUPLICATE KEY UPDATE trip_id=VALUES(trip_id)", parameters=(trip_id,))
-    row = hook.get_first("SELECT trip_sk FROM dim_trip WHERE trip_id = %s", parameters=(trip_id,))
+        dim_cache.set(key, row[0])
+        return row[0]
+    hook.run(
+        "INSERT INTO dim_trip (trip_id) VALUES (%s) ON DUPLICATE KEY UPDATE trip_id=VALUES(trip_id)",
+        parameters=(
+            trip_id,
+        ))
+    row = hook.get_first(
+        "SELECT trip_sk FROM dim_trip WHERE trip_id = %s",
+        parameters=(
+            trip_id,
+        ))
     if row:
-        dim_cache.set(key, row[0]); return row[0]
+        dim_cache.set(key, row[0])
+        return row[0]
     raise AirflowException(f"Cannot load trip dimension for {trip_id}")
+
 
 def load_dim_route(hook, route_id: str, route_name: str) -> int:
     key = f"route_{route_id}"
     cached = dim_cache.get(key)
     if cached:
         return cached
-    row = hook.get_first("SELECT route_sk FROM dim_route WHERE route_id = %s", parameters=(route_id,))
+    row = hook.get_first(
+        "SELECT route_sk FROM dim_route WHERE route_id = %s",
+        parameters=(
+            route_id,
+        ))
     if row:
-        dim_cache.set(key, row[0]); return row[0]
+        dim_cache.set(key, row[0])
+        return row[0]
     hook.run(
         "INSERT INTO dim_route (route_id, route_name) VALUES (%s, %s) "
         "ON DUPLICATE KEY UPDATE route_name=VALUES(route_name)",
         parameters=(route_id, route_name)
     )
-    row = hook.get_first("SELECT route_sk FROM dim_route WHERE route_id = %s", parameters=(route_id,))
+    row = hook.get_first(
+        "SELECT route_sk FROM dim_route WHERE route_id = %s",
+        parameters=(
+            route_id,
+        ))
     if row:
-        dim_cache.set(key, row[0]); return row[0]
+        dim_cache.set(key, row[0])
+        return row[0]
     raise AirflowException(f"Cannot load route dimension for {route_id}")
+
 
 def load_dim_agency(hook, agency_id: str, agency_name: str) -> int:
     key = f"agency_{agency_id}"
     cached = dim_cache.get(key)
     if cached:
         return cached
-    row = hook.get_first("SELECT agency_sk FROM dim_agency WHERE agency_id = %s", parameters=(agency_id,))
+    row = hook.get_first(
+        "SELECT agency_sk FROM dim_agency WHERE agency_id = %s",
+        parameters=(
+            agency_id,
+        ))
     if row:
-        dim_cache.set(key, row[0]); return row[0]
+        dim_cache.set(key, row[0])
+        return row[0]
     hook.run(
         "INSERT INTO dim_agency (agency_id, agency_name) VALUES (%s, %s) "
         "ON DUPLICATE KEY UPDATE agency_name=VALUES(agency_name)",
         parameters=(agency_id, agency_name)
     )
-    row = hook.get_first("SELECT agency_sk FROM dim_agency WHERE agency_id = %s", parameters=(agency_id,))
+    row = hook.get_first(
+        "SELECT agency_sk FROM dim_agency WHERE agency_id = %s",
+        parameters=(
+            agency_id,
+        ))
     if row:
-        dim_cache.set(key, row[0]); return row[0]
+        dim_cache.set(key, row[0])
+        return row[0]
     raise AirflowException(f"Cannot load agency dimension for {agency_id}")
+
 
 def load_dim_service_type(hook, service_type: str) -> int:
     key = f"service_{service_type}"
     cached = dim_cache.get(key)
     if cached:
         return cached
-    row = hook.get_first("SELECT service_sk FROM dim_service_type WHERE service_type = %s", parameters=(service_type,))
+    row = hook.get_first(
+        "SELECT service_sk FROM dim_service_type WHERE service_type = %s",
+        parameters=(
+            service_type,
+        ))
     if row:
-        dim_cache.set(key, row[0]); return row[0]
-    hook.run("INSERT INTO dim_service_type (service_type) VALUES (%s) ON DUPLICATE KEY UPDATE service_type=VALUES(service_type)", parameters=(service_type,))
-    row = hook.get_first("SELECT service_sk FROM dim_service_type WHERE service_type = %s", parameters=(service_type,))
+        dim_cache.set(key, row[0])
+        return row[0]
+    hook.run(
+        "INSERT INTO dim_service_type (service_type) VALUES (%s) ON DUPLICATE KEY UPDATE service_type=VALUES(service_type)",
+        parameters=(
+            service_type,
+        ))
+    row = hook.get_first(
+        "SELECT service_sk FROM dim_service_type WHERE service_type = %s",
+        parameters=(
+            service_type,
+        ))
     if row:
-        dim_cache.set(key, row[0]); return row[0]
-    raise AirflowException(f"Cannot load service_type dimension for {service_type}")
+        dim_cache.set(key, row[0])
+        return row[0]
+    raise AirflowException(
+        f"Cannot load service_type dimension for {service_type}")
+
 
 def load_dim_train_type(hook, train_type: Optional[str]) -> Optional[int]:
     if not train_type:
@@ -196,14 +295,29 @@ def load_dim_train_type(hook, train_type: Optional[str]) -> Optional[int]:
     cached = dim_cache.get(key)
     if cached:
         return cached
-    row = hook.get_first("SELECT train_type_sk FROM dim_train_type WHERE train_type = %s", parameters=(train_type,))
+    row = hook.get_first(
+        "SELECT train_type_sk FROM dim_train_type WHERE train_type = %s",
+        parameters=(
+            train_type,
+        ))
     if row:
-        dim_cache.set(key, row[0]); return row[0]
-    hook.run("INSERT INTO dim_train_type (train_type) VALUES (%s) ON DUPLICATE KEY UPDATE train_type=VALUES(train_type)", parameters=(train_type,))
-    row = hook.get_first("SELECT train_type_sk FROM dim_train_type WHERE train_type = %s", parameters=(train_type,))
+        dim_cache.set(key, row[0])
+        return row[0]
+    hook.run(
+        "INSERT INTO dim_train_type (train_type) VALUES (%s) ON DUPLICATE KEY UPDATE train_type=VALUES(train_type)",
+        parameters=(
+            train_type,
+        ))
+    row = hook.get_first(
+        "SELECT train_type_sk FROM dim_train_type WHERE train_type = %s",
+        parameters=(
+            train_type,
+        ))
     if row:
-        dim_cache.set(key, row[0]); return row[0]
+        dim_cache.set(key, row[0])
+        return row[0]
     return None
+
 
 def load_dim_traction(hook, traction: Optional[str]) -> Optional[int]:
     if not traction:
@@ -212,14 +326,29 @@ def load_dim_traction(hook, traction: Optional[str]) -> Optional[int]:
     cached = dim_cache.get(key)
     if cached:
         return cached
-    row = hook.get_first("SELECT traction_sk FROM dim_traction WHERE traction = %s", parameters=(traction,))
+    row = hook.get_first(
+        "SELECT traction_sk FROM dim_traction WHERE traction = %s",
+        parameters=(
+            traction,
+        ))
     if row:
-        dim_cache.set(key, row[0]); return row[0]
-    hook.run("INSERT INTO dim_traction (traction) VALUES (%s) ON DUPLICATE KEY UPDATE traction=VALUES(traction)", parameters=(traction,))
-    row = hook.get_first("SELECT traction_sk FROM dim_traction WHERE traction = %s", parameters=(traction,))
+        dim_cache.set(key, row[0])
+        return row[0]
+    hook.run(
+        "INSERT INTO dim_traction (traction) VALUES (%s) ON DUPLICATE KEY UPDATE traction=VALUES(traction)",
+        parameters=(
+            traction,
+        ))
+    row = hook.get_first(
+        "SELECT traction_sk FROM dim_traction WHERE traction = %s",
+        parameters=(
+            traction,
+        ))
     if row:
-        dim_cache.set(key, row[0]); return row[0]
+        dim_cache.set(key, row[0])
+        return row[0]
     return None
+
 
 def load_dim_country(hook, country_code: Optional[str]) -> Optional[int]:
     if not country_code:
@@ -229,9 +358,14 @@ def load_dim_country(hook, country_code: Optional[str]) -> Optional[int]:
     if cached:
         return cached
 
-    row = hook.get_first("SELECT country_sk FROM dim_country WHERE country_code = %s", parameters=(country_code,))
+    row = hook.get_first(
+        "SELECT country_sk FROM dim_country WHERE country_code = %s",
+        parameters=(
+            country_code,
+        ))
     if row:
-        dim_cache.set(key, row[0]); return row[0]
+        dim_cache.set(key, row[0])
+        return row[0]
 
     # Auto-crée le pays si absent, puis relit
     try:
@@ -240,40 +374,67 @@ def load_dim_country(hook, country_code: Optional[str]) -> Optional[int]:
             "ON DUPLICATE KEY UPDATE country_code=VALUES(country_code)",
             parameters=(country_code,)
         )
-        row = hook.get_first("SELECT country_sk FROM dim_country WHERE country_code = %s", parameters=(country_code,))
+        row = hook.get_first(
+            "SELECT country_sk FROM dim_country WHERE country_code = %s",
+            parameters=(
+                country_code,
+            ))
         if row:
-            dim_cache.set(key, row[0]); return row[0]
+            dim_cache.set(key, row[0])
+            return row[0]
     except Exception as e:
-        logger.warning(f"Could not insert country '{country_code}' into dim_country: {e}")
+        logger.warning(
+            f"Could not insert country '{country_code}' into dim_country: {e}")
 
     return None
 
-def load_dim_location(hook, stop_name: Optional[str], country_code: Optional[str] = None) -> Optional[int]:
+
+def load_dim_location(
+        hook,
+        stop_name: Optional[str],
+        country_code: Optional[str] = None) -> Optional[int]:
     if not stop_name:
         return None
 
     if country_code:
-        exists = hook.get_first("SELECT 1 FROM dim_country WHERE country_code = %s", parameters=(country_code,))
+        exists = hook.get_first(
+            "SELECT 1 FROM dim_country WHERE country_code = %s",
+            parameters=(
+                country_code,
+            ))
         if not exists:
-            logger.warning(f"[FK] country_code '{country_code}' not in dim_country -> set NULL for location '{stop_name}'")
+            logger.warning(
+                f"[FK] country_code '{country_code}' not in dim_country -> set NULL for location '{stop_name}'")
             country_code = None
 
     key = f"location_{stop_name}_{country_code}"
     cached = dim_cache.get(key)
     if cached:
         return cached
-    row = hook.get_first("SELECT location_sk FROM dim_location WHERE stop_name = %s", parameters=(stop_name,))
+    row = hook.get_first(
+        "SELECT location_sk FROM dim_location WHERE stop_name = %s",
+        parameters=(
+            stop_name,
+        ))
     if row:
-        dim_cache.set(key, row[0]); return row[0]
+        dim_cache.set(key, row[0])
+        return row[0]
     hook.run(
         "INSERT INTO dim_location (stop_name, country_code) VALUES (%s, %s) "
         "ON DUPLICATE KEY UPDATE stop_name=VALUES(stop_name), country_code=VALUES(country_code)",
-        parameters=(stop_name, country_code)
-    )
-    row = hook.get_first("SELECT location_sk FROM dim_location WHERE stop_name = %s", parameters=(stop_name,))
+        parameters=(
+            stop_name,
+            country_code))
+    row = hook.get_first(
+        "SELECT location_sk FROM dim_location WHERE stop_name = %s",
+        parameters=(
+            stop_name,
+        ))
     if row:
-        dim_cache.set(key, row[0]); return row[0]
+        dim_cache.set(key, row[0])
+        return row[0]
     return None
+
 
 def load_dim_time(hook, time_str: Optional[str]) -> Optional[int]:
     if not time_str:
@@ -282,9 +443,14 @@ def load_dim_time(hook, time_str: Optional[str]) -> Optional[int]:
     cached = dim_cache.get(key)
     if cached:
         return cached
-    row = hook.get_first("SELECT time_sk FROM dim_time WHERE time_value = %s", parameters=(time_str,))
+    row = hook.get_first(
+        "SELECT time_sk FROM dim_time WHERE time_value = %s",
+        parameters=(
+            time_str,
+        ))
     if row:
-        dim_cache.set(key, row[0]); return row[0]
+        dim_cache.set(key, row[0])
+        return row[0]
     try:
         parts = time_str.split(":")
         hour = int(parts[0]) % 24
@@ -295,19 +461,33 @@ def load_dim_time(hook, time_str: Optional[str]) -> Optional[int]:
     hook.run(
         "INSERT INTO dim_time (time_value, hour, minute, second) VALUES (%s, %s, %s, %s) "
         "ON DUPLICATE KEY UPDATE time_value=VALUES(time_value)",
-        parameters=(time_str, hour, minute, second)
-    )
-    row = hook.get_first("SELECT time_sk FROM dim_time WHERE time_value = %s", parameters=(time_str,))
+        parameters=(
+            time_str,
+            hour,
+            minute,
+            second))
+    row = hook.get_first(
+        "SELECT time_sk FROM dim_time WHERE time_value = %s",
+        parameters=(
+            time_str,
+        ))
     if row:
-        dim_cache.set(key, row[0]); return row[0]
+        dim_cache.set(key, row[0])
+        return row[0]
     return None
 
 # ============================================================
 # Validation
 # ============================================================
 
+
 def validate_row(row: Dict[str, Any]) -> Tuple[bool, str]:
-    required = ["trip_id", "agency_name", "route_name", "origin_stop_name", "destination_stop_name"]
+    required = [
+        "trip_id",
+        "agency_name",
+        "route_name",
+        "origin_stop_name",
+        "destination_stop_name"]
     for field in required:
         val = row.get(field)
         if val is None or str(val).strip() == "" or str(val) == "ERROR":
@@ -324,6 +504,7 @@ def validate_row(row: Dict[str, Any]) -> Tuple[bool, str]:
 # ============================================================
 # Staging
 # ============================================================
+
 
 def load_staging_table(
     hook: MySqlHook,
@@ -346,7 +527,8 @@ def load_staging_table(
     loaded_count = 0
     row_num = 0
     try:
-        for chunk_idx, chunk in enumerate(pd.read_csv(csv_path, dtype=str, chunksize=5000)):
+        for chunk_idx, chunk in enumerate(
+                pd.read_csv(csv_path, dtype=str, chunksize=5000)):
             batch_values: List[Tuple] = []
             diagnostics: List[str] = []
             batch_debug: List[Dict[str, Any]] = []
@@ -360,16 +542,24 @@ def load_staging_table(
                     continue
 
                 route_full = str(row.get("route_name", ""))
-                route_id = route_full.split(" - ")[0] if " - " in route_full else route_full
+                route_id = route_full.split(
+                    " - ")[0] if " - " in route_full else route_full
 
-                origin_country = sanitize_country_for_staging(row.get("origin_country"), origin_max_len, f"origin_country row {row_num}")
-                destination_country = sanitize_country_for_staging(row.get("destination_country"), dest_max_len, f"destination_country row {row_num}")
+                origin_country = sanitize_country_for_staging(
+                    row.get("origin_country"), origin_max_len, f"origin_country row {row_num}")
+                destination_country = sanitize_country_for_staging(
+                    row.get("destination_country"), dest_max_len, f"destination_country row {row_num}")
 
                 if origin_country and len(origin_country) > origin_max_len:
-                    diagnostics.append(f"row {row_num} origin_country '{origin_country}' len={len(origin_country)} > {origin_max_len}")
+                    diagnostics.append(
+                        f"row {row_num} origin_country '{origin_country}' len={
+                            len(origin_country)} > {origin_max_len}")
                     origin_country = origin_country[:origin_max_len]
-                if destination_country and len(destination_country) > dest_max_len:
-                    diagnostics.append(f"row {row_num} destination_country '{destination_country}' len={len(destination_country)} > {dest_max_len}")
+                if destination_country and len(
+                        destination_country) > dest_max_len:
+                    diagnostics.append(
+                        f"row {row_num} destination_country '{destination_country}' len={
+                            len(destination_country)} > {dest_max_len}")
                     destination_country = destination_country[:dest_max_len]
 
                 batch_values.append((
@@ -377,7 +567,8 @@ def load_staging_table(
                     str(row.get("trip_id", "")),
                     route_id,
                     route_full,
-                    str(row.get("agency_name", "")).split(":")[0] if "agency_name" in row else "",
+                    str(row.get("agency_name", "")).split(":")[
+                        0] if "agency_name" in row else "",
                     str(row.get("agency_name", "")),
                     str(row.get("service_type", "")),
                     str(row.get("origin_stop_name", "")),
@@ -386,14 +577,25 @@ def load_staging_table(
                     destination_country,
                     str(row.get("departure_time", "")),
                     str(row.get("arrival_time", "")),
-                    float(row.get("distance_km", 0)) if pd.notna(row.get("distance_km")) else None,
-                    float(row.get("duration_h", 0)) if pd.notna(row.get("duration_h")) else None,
+                    float(
+                        row.get(
+                            "distance_km",
+                            0)) if pd.notna(
+                        row.get("distance_km")) else None,
+                    float(
+                        row.get(
+                            "duration_h",
+                            0)) if pd.notna(
+                        row.get("duration_h")) else None,
                     str(row.get("train_type", "")),
                     str(row.get("traction", "")),
                     "",  # transport_type placeholder
-                    float(row.get("emission_gco2e_pkm", 0)) if pd.notna(row.get("emission_gco2e_pkm")) else None,
-                    float(row.get("total_emission_kgco2e", 0)) if pd.notna(row.get("total_emission_kgco2e")) else None,
-                    int(row.get("frequency_per_week", 0)) if pd.notna(row.get("frequency_per_week")) else None,
+                    float(row.get("emission_gco2e_pkm", 0)) if pd.notna(
+                        row.get("emission_gco2e_pkm")) else None,
+                    float(row.get("total_emission_kgco2e", 0)) if pd.notna(
+                        row.get("total_emission_kgco2e")) else None,
+                    int(row.get("frequency_per_week", 0)) if pd.notna(
+                        row.get("frequency_per_week")) else None,
                 ))
 
                 if len(batch_debug) < 5:
@@ -412,15 +614,16 @@ def load_staging_table(
             if not batch_values:
                 continue
 
-            placeholders = ", ".join(["(" + ",".join(["%s"] * 23) + ")"] * len(batch_values))
+            placeholders = ", ".join(
+                ["(" + ",".join(["%s"] * 23) + ")"] * len(batch_values))
             flat_params: List[Any] = [v for tup in batch_values for v in tup]
 
             try:
                 hook.run(
-                    f"""INSERT INTO stg_trips_summary 
-                        (load_id, loaded_at, dataset_id, trip_id, route_id, route_name, 
+                    f"""INSERT INTO stg_trips_summary
+                        (load_id, loaded_at, dataset_id, trip_id, route_id, route_name,
                          agency_id, agency_name, service_type, origin_stop_name, origin_country,
-                         destination_stop_name, destination_country, departure_time, arrival_time, 
+                         destination_stop_name, destination_country, departure_time, arrival_time,
                          distance_km, duration_h, train_type, traction, transport_type,
                          emission_gco2e_pkm, total_emission_kgco2e, frequency_per_week)
                         VALUES {placeholders}
@@ -430,22 +633,41 @@ def load_staging_table(
             except Exception as sql_error:
                 start_row = row_num - len(batch_values) + 1
                 end_row = row_num
-                logger.error(f"🔴 SQL INSERT FAILED at chunk {chunk_idx}, rows {start_row}-{end_row}")
+                logger.error(
+                    f"🔴 SQL INSERT FAILED at chunk {chunk_idx}, rows {start_row}-{end_row}")
                 logger.error(f"🔴 Error: {sql_error}")
                 logger.error(f"🔴 Batch size: {len(batch_values)} rows")
 
                 try:
                     cols = [
-                        "load_id","loaded_at","dataset_id","trip_id","route_id","route_name",
-                        "agency_id","agency_name","service_type","origin_stop_name","origin_country",
-                        "destination_stop_name","destination_country","departure_time","arrival_time",
-                        "distance_km","duration_h","train_type","traction","transport_type",
-                        "emission_gco2e_pkm","total_emission_kgco2e","frequency_per_week"
-                    ]
+                        "load_id",
+                        "loaded_at",
+                        "dataset_id",
+                        "trip_id",
+                        "route_id",
+                        "route_name",
+                        "agency_id",
+                        "agency_name",
+                        "service_type",
+                        "origin_stop_name",
+                        "origin_country",
+                        "destination_stop_name",
+                        "destination_country",
+                        "departure_time",
+                        "arrival_time",
+                        "distance_km",
+                        "duration_h",
+                        "train_type",
+                        "traction",
+                        "transport_type",
+                        "emission_gco2e_pkm",
+                        "total_emission_kgco2e",
+                        "frequency_per_week"]
                     df = pd.DataFrame(batch_values, columns=cols)
                     dump_dir = Path("/opt/airflow/logs/staging_dumps")
                     dump_dir.mkdir(parents=True, exist_ok=True)
-                    dump_path = dump_dir / f"stg_batch_fail_chunk{chunk_idx}_load{load_id}_rows{start_row}-{end_row}.csv"
+                    dump_path = dump_dir / \
+                        f"stg_batch_fail_chunk{chunk_idx}_load{load_id}_rows{start_row}-{end_row}.csv"
                     df.to_csv(dump_path, index=False, encoding="utf-8")
                     logger.error(f"  🔎 Batch dump saved: {dump_path}")
                 except Exception as dump_err:
@@ -453,12 +675,18 @@ def load_staging_table(
 
                 offenders = []
                 for dbg in batch_debug:
-                    if (dbg["origin_country"] and dbg["origin_len"] > origin_max_len) or (dbg["destination_country"] and dbg["dest_len"] > dest_max_len):
+                    if (dbg["origin_country"] and dbg["origin_len"] > origin_max_len) or (
+                            dbg["destination_country"] and dbg["dest_len"] > dest_max_len):
                         offenders.append(dbg)
                 for dbg in offenders[:10]:
-                    logger.error(f"  offender batch_idx={dbg['batch_index']} csv_row={dbg['csv_row_num']} "
-                                 f"origin='{dbg['origin_country']}'(len={dbg['origin_len']}, max={origin_max_len}) "
-                                 f"dest='{dbg['destination_country']}'(len={dbg['dest_len']}, max={dest_max_len})")
+                    logger.error(
+                        f"  offender batch_idx={
+                            dbg['batch_index']} csv_row={
+                            dbg['csv_row_num']} " f"origin='{
+                            dbg['origin_country']}'(len={
+                            dbg['origin_len']}, max={origin_max_len}) " f"dest='{
+                            dbg['destination_country']}'(len={
+                            dbg['dest_len']}, max={dest_max_len})")
 
                 for d in diagnostics[:20]:
                     logger.error(f"  diag: {d}")
@@ -466,29 +694,39 @@ def load_staging_table(
                 raise
 
             if diagnostics:
-                logger.warning(f"Chunk {chunk_idx}: {len(diagnostics)} country diagnostics. Examples: {diagnostics[:3]}")
+                logger.warning(
+                    f"Chunk {chunk_idx}: {len(diagnostics)} country diagnostics. Examples: {diagnostics[:3]}")
 
             loaded_count += len(batch_values)
             if chunk_idx % 10 == 0:
-                logger.info(f"  Chunk {chunk_idx}: +{len(batch_values)} rows (total {loaded_count})")
+                logger.info(
+                    f"  Chunk {chunk_idx}: +{len(batch_values)} rows (total {loaded_count})")
                 for dbg in batch_debug:
                     logger.info(
-                        f"[PRE-INSERT] chunk={chunk_idx} batch_idx={dbg['batch_index']} csv_row={dbg['csv_row_num']} "
-                        f"trip={dbg['trip_id']} route={dbg['route_id']} "
-                        f"origin='{dbg['origin_country']}'(len={dbg['origin_len']}) "
-                        f"dest='{dbg['destination_country']}'(len={dbg['dest_len']})"
-                    )
+                        f"[PRE-INSERT] chunk={chunk_idx} batch_idx={
+                            dbg['batch_index']} csv_row={
+                            dbg['csv_row_num']} " f"trip={
+                            dbg['trip_id']} route={
+                            dbg['route_id']} " f"origin='{
+                            dbg['origin_country']}'(len={
+                            dbg['origin_len']}) " f"dest='{
+                                dbg['destination_country']}'(len={
+                                    dbg['dest_len']})")
 
-        logger.info(f"✓ Loaded {loaded_count} rows into stg_trips_summary (processed {row_num} total rows)")
+        logger.info(
+            f"✓ Loaded {loaded_count} rows into stg_trips_summary (processed {row_num} total rows)")
         return loaded_count
 
     except Exception as e:
-        logger.error(f"Staging load failed at row {row_num}: {e}", exc_info=True)
+        logger.error(
+            f"Staging load failed at row {row_num}: {e}",
+            exc_info=True)
         raise
 
 # ============================================================
 # Set-based dimension upsert + fact load (rapide)
 # ============================================================
+
 
 def upsert_dimensions_from_staging(hook: MySqlHook, load_id: int) -> None:
     # Countries (origin + destination)
@@ -507,7 +745,7 @@ def upsert_dimensions_from_staging(hook: MySqlHook, load_id: int) -> None:
     # Times
     hook.run("""
         INSERT INTO dim_time (time_value, hour, minute, second)
-        SELECT t, 
+        SELECT t,
                CAST(SUBSTRING_INDEX(t, ':', 1) AS UNSIGNED) %% 24,
                CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(t, ':', 2), ':', -1) AS UNSIGNED),
                CAST(SUBSTRING_INDEX(t, ':', -1) AS UNSIGNED)
@@ -586,10 +824,11 @@ def upsert_dimensions_from_staging(hook: MySqlHook, load_id: int) -> None:
             SELECT DISTINCT destination_stop_name, destination_country
             FROM stg_trips_summary WHERE load_id=%s
         ) t
-        ON DUPLICATE KEY UPDATE 
+        ON DUPLICATE KEY UPDATE
             stop_name=VALUES(stop_name),
             country_code=VALUES(country_code)
     """, parameters=(load_id, load_id))
+
 
 def load_fact_table(hook, load_id: int) -> int:
     # Upsert dimensions en bloc
@@ -619,9 +858,9 @@ def load_fact_table(hook, load_id: int) -> int:
         LEFT JOIN dim_traction    dtr ON dtr.traction    = s.traction
         LEFT JOIN dim_country dco ON dco.country_code = s.origin_country
         LEFT JOIN dim_country dcd ON dcd.country_code = s.destination_country
-        LEFT JOIN dim_location dlo ON dlo.stop_name = s.origin_stop_name 
+        LEFT JOIN dim_location dlo ON dlo.stop_name = s.origin_stop_name
                                    AND (dlo.country_code <=> s.origin_country)
-        LEFT JOIN dim_location dld ON dld.stop_name = s.destination_stop_name 
+        LEFT JOIN dim_location dld ON dld.stop_name = s.destination_stop_name
                                    AND (dld.country_code <=> s.destination_country)
         LEFT JOIN dim_time tdep ON tdep.time_value = s.departure_time
         LEFT JOIN dim_time tarr ON tarr.time_value = s.arrival_time
@@ -649,14 +888,20 @@ def load_fact_table(hook, load_id: int) -> int:
     """, parameters=(load_id, load_id))
 
     # Compte fiable: nombre de faits marqués par ce load_id
-    row = hook.get_first("SELECT COUNT(*) FROM fact_trip_summary WHERE last_load_id = %s", parameters=(load_id,))
+    row = hook.get_first(
+        "SELECT COUNT(*) FROM fact_trip_summary WHERE last_load_id = %s",
+        parameters=(
+            load_id,
+        ))
     return int(row[0]) if row and row[0] is not None else 0
 
 # ============================================================
 # Entrée principale
 # ============================================================
 
-def load_gtfs(processed_dir: str, conn_id: str = "mysql_default") -> Dict[str, Any]:
+
+def load_gtfs(processed_dir: str,
+              conn_id: str = "mysql_default") -> Dict[str, Any]:
     hook = MySqlHook(mysql_conn_id=conn_id)
     processed = Path(processed_dir)
 
@@ -690,7 +935,13 @@ def load_gtfs(processed_dir: str, conn_id: str = "mysql_default") -> Dict[str, A
             for f in dataset_dir.glob("*"):
                 logger.error(f"  - {f.name}")
 
-        loaded = load_staging_table(hook, csv_path, load_id, dataset_id, origin_max_len, dest_max_len)
+        loaded = load_staging_table(
+            hook,
+            csv_path,
+            load_id,
+            dataset_id,
+            origin_max_len,
+            dest_max_len)
         if loaded == 0:
             logger.warning(f"No data for dataset {dataset_id}")
             dim_cache.clear()
@@ -706,5 +957,6 @@ def load_gtfs(processed_dir: str, conn_id: str = "mysql_default") -> Dict[str, A
     if total_loaded == 0:
         raise AirflowException("No data loaded")
 
-    logger.info(f"✓✓✓ SUCCESS: {total_loaded} total facts loaded across {datasets_done} datasets")
+    logger.info(
+        f"✓✓✓ SUCCESS: {total_loaded} total facts loaded across {datasets_done} datasets")
     return {"total_rows": total_loaded, "datasets": datasets_done}

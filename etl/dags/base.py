@@ -1,24 +1,23 @@
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
-from airflow.decorators import dag, task
-from airflow.models import Variable
-from airflow.operators.python import get_current_context
-import pendulum
-from typing import List, Dict, Any
-import logging
-import json
-from datetime import datetime
-
+from scripts.load_gtfs import load_gtfs
+from scripts.transform_gtfs_data import transform_gtfs
 from scripts.extract_gtfs_data_gouv_script import (
     build_download_list,
     download_and_extract_gtfs,
     download_and_unzip_from_zip_urls,
     clean_old_downloads
 )
-from scripts.transform_gtfs_data import transform_gtfs
-from scripts.load_gtfs import load_gtfs
+from datetime import datetime
+import json
+import logging
+from typing import List, Dict, Any
+import pendulum
+from airflow.operators.python import get_current_context
+from airflow.models import Variable
+from airflow.decorators import dag, task
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
 
 logger = logging.getLogger(__name__)
 
@@ -26,12 +25,13 @@ logger = logging.getLogger(__name__)
 # Structured Logger pour métriques
 # ============================================================
 
+
 class StructuredLogger:
     """Logger structuré pour faciliter le monitoring"""
-    
+
     def __init__(self, logger):
         self.logger = logger
-    
+
     def log_metric(self, metric_name: str, value: float, **kwargs):
         log_data = {
             "type": "metric",
@@ -41,7 +41,7 @@ class StructuredLogger:
             **kwargs
         }
         self.logger.info(json.dumps(log_data))
-    
+
     def log_event(self, event_name: str, **kwargs):
         log_data = {
             "type": "event",
@@ -50,7 +50,7 @@ class StructuredLogger:
             **kwargs
         }
         self.logger.info(json.dumps(log_data))
-    
+
     def log_error(self, error_name: str, error_msg: str, **kwargs):
         log_data = {
             "type": "error",
@@ -61,11 +61,13 @@ class StructuredLogger:
         }
         self.logger.error(json.dumps(log_data))
 
+
 structured_logger = StructuredLogger(logger)
 
 # ============================================================
 # Helpers
 # ============================================================
+
 
 def _parse_urls(value: str) -> List[str]:
     import json
@@ -81,6 +83,7 @@ def _parse_urls(value: str) -> List[str]:
 # Configuration
 # ============================================================
 
+
 default_args = {
     'owner': 'airflow',
     'retries': 2,
@@ -90,6 +93,7 @@ default_args = {
 # ============================================================
 # DAG Principal
 # ============================================================
+
 
 @dag(
     dag_id="gtfs_full_etl",
@@ -109,7 +113,7 @@ def gtfs_full_etl():
     2. Transform
     3. Load
     """
-    
+
     default_urls = [
         "https://transport.data.gouv.fr/api/datasets/563dd039b5950814b0588710",
         "https://transport.data.gouv.fr/api/datasets/5f9008f1af9cf0bed8270cde",
@@ -134,12 +138,21 @@ def gtfs_full_etl():
         BASE_URLS = [single] if single else default_urls
 
     RAW_DIR = Variable.get("gtfs_raw_dir", default_var="/opt/airflow/data/raw")
-    STAGING_DIR = Variable.get("gtfs_staging_dir", default_var="/opt/airflow/data/staging")
-    PROCESSED_DIR = Variable.get("gtfs_processed_dir", default_var="/opt/airflow/data/processed")
+    STAGING_DIR = Variable.get(
+        "gtfs_staging_dir",
+        default_var="/opt/airflow/data/staging")
+    PROCESSED_DIR = Variable.get(
+        "gtfs_processed_dir",
+        default_var="/opt/airflow/data/processed")
     DB_CONN_ID = Variable.get("gtfs_db_conn_id", default_var="mysql_default")
-    
-    FORCE_DOWNLOAD = Variable.get("gtfs_force_download", default_var="false").lower() == "true"
-    KEEP_LATEST_ZIPS = int(Variable.get("gtfs_keep_latest_zips", default_var="2"))
+
+    FORCE_DOWNLOAD = Variable.get(
+        "gtfs_force_download",
+        default_var="false").lower() == "true"
+    KEEP_LATEST_ZIPS = int(
+        Variable.get(
+            "gtfs_keep_latest_zips",
+            default_var="2"))
     MAX_WORKERS = int(Variable.get("gtfs_max_workers", default_var="4"))
 
     structured_logger.log_event(
@@ -156,7 +169,9 @@ def gtfs_full_etl():
         context = get_current_context()
         start_time = datetime.now()
         try:
-            structured_logger.log_event("extract_started", task_id=context['task_instance'].task_id)
+            structured_logger.log_event(
+                "extract_started",
+                task_id=context['task_instance'].task_id)
             downloaded_count = 0
             skipped_count = 0
 
@@ -194,7 +209,7 @@ def gtfs_full_etl():
                 clean_old_downloads(RAW_DIR, keep_latest=KEEP_LATEST_ZIPS)
             except Exception as e:
                 logger.warning(f"Failed to clean old downloads: {e}")
-            
+
             duration = (datetime.now() - start_time).total_seconds()
             stats = {
                 "downloaded": downloaded_count,
@@ -204,11 +219,13 @@ def gtfs_full_etl():
             }
             structured_logger.log_metric("extract_duration", duration, **stats)
             structured_logger.log_event("extract_completed", **stats)
-            logger.info(f"✓ EXTRACT completed - Downloaded: {downloaded_count}, Duration: {duration:.2f}s")
+            logger.info(
+                f"✓ EXTRACT completed - Downloaded: {downloaded_count}, Duration: {duration:.2f}s")
             return stats
         except Exception as e:
             duration = (datetime.now() - start_time).total_seconds()
-            structured_logger.log_error("extract_failed", str(e), duration_seconds=duration)
+            structured_logger.log_error(
+                "extract_failed", str(e), duration_seconds=duration)
             logger.error(f"✗ EXTRACT failed after {duration:.2f}s: {e}")
             raise
 
@@ -217,10 +234,14 @@ def gtfs_full_etl():
         context = get_current_context()
         start_time = datetime.now()
         try:
-            structured_logger.log_event("transform_started",
-                                       task_id=context['task_instance'].task_id,
-                                       extract_stats=extract_stats)
-            result = transform_gtfs(STAGING_DIR, PROCESSED_DIR, max_workers=MAX_WORKERS)
+            structured_logger.log_event(
+                "transform_started",
+                task_id=context['task_instance'].task_id,
+                extract_stats=extract_stats)
+            result = transform_gtfs(
+                STAGING_DIR,
+                PROCESSED_DIR,
+                max_workers=MAX_WORKERS)
             duration = (datetime.now() - start_time).total_seconds()
             stats = {
                 "files_generated": len(result),
@@ -228,13 +249,16 @@ def gtfs_full_etl():
                 "duration_seconds": duration,
                 "success": True
             }
-            structured_logger.log_metric("transform_duration", duration, **stats)
+            structured_logger.log_metric(
+                "transform_duration", duration, **stats)
             structured_logger.log_event("transform_completed", **stats)
-            logger.info(f"✓ TRANSFORM completed - Files: {len(result)}, Duration: {duration:.2f}s")
+            logger.info(
+                f"✓ TRANSFORM completed - Files: {len(result)}, Duration: {duration:.2f}s")
             return stats
         except Exception as e:
             duration = (datetime.now() - start_time).total_seconds()
-            structured_logger.log_error("transform_failed", str(e), duration_seconds=duration)
+            structured_logger.log_error(
+                "transform_failed", str(e), duration_seconds=duration)
             logger.error(f"✗ TRANSFORM failed after {duration:.2f}s: {e}")
             raise
 
@@ -243,34 +267,46 @@ def gtfs_full_etl():
         context = get_current_context()
         start_time = datetime.now()
         try:
-            structured_logger.log_event("load_started",
-                                       task_id=context['task_instance'].task_id,
-                                       transform_stats=transform_stats)
+            structured_logger.log_event(
+                "load_started",
+                task_id=context['task_instance'].task_id,
+                transform_stats=transform_stats)
             if not transform_stats.get("files_list"):
                 logger.warning("No files to load from transform")
-                return {"rows_loaded": 0, "success": False, "message": "No files to load"}
-            
+                return {
+                    "rows_loaded": 0,
+                    "success": False,
+                    "message": "No files to load"}
+
             result = load_gtfs(PROCESSED_DIR, conn_id=DB_CONN_ID)
             duration = (datetime.now() - start_time).total_seconds()
             stats = {
-                "rows_loaded": result.get("total_rows", 0) if isinstance(result, dict) else 0,
+                "rows_loaded": result.get(
+                    "total_rows",
+                    0) if isinstance(
+                    result,
+                    dict) else 0,
                 "duration_seconds": duration,
                 "success": True,
-                "load_result": result
-            }
+                "load_result": result}
             structured_logger.log_metric("load_duration", duration, **stats)
             structured_logger.log_metric("rows_loaded", stats["rows_loaded"])
             structured_logger.log_event("load_completed", **stats)
-            logger.info(f"✓ LOAD completed - Rows: {stats['rows_loaded']}, Duration: {duration:.2f}s")
+            logger.info(
+                f"✓ LOAD completed - Rows: {stats['rows_loaded']}, Duration: {duration:.2f}s")
             return stats
         except Exception as e:
             duration = (datetime.now() - start_time).total_seconds()
-            structured_logger.log_error("load_failed", str(e), duration_seconds=duration)
+            structured_logger.log_error(
+                "load_failed", str(e), duration_seconds=duration)
             logger.error(f"✗ LOAD failed after {duration:.2f}s: {e}")
             raise
 
     @task
-    def pipeline_summary(extract_stats: Dict, transform_stats: Dict, load_stats: Dict):
+    def pipeline_summary(
+            extract_stats: Dict,
+            transform_stats: Dict,
+            load_stats: Dict):
         total_duration = (
             extract_stats.get("duration_seconds", 0) +
             transform_stats.get("duration_seconds", 0) +
@@ -291,8 +327,15 @@ def gtfs_full_etl():
         structured_logger.log_event("pipeline_completed", **summary)
         logger.info(f"📊 PIPELINE SUMMARY:")
         logger.info(f"   Total Duration: {total_duration:.2f}s")
-        logger.info(f"   Files Downloaded: {extract_stats.get('downloaded', 0)}")
-        logger.info(f"   Files Transformed: {transform_stats.get('files_generated', 0)}")
+        logger.info(
+            f"   Files Downloaded: {
+                extract_stats.get(
+                    'downloaded', 0)}")
+        logger.info(
+            f"   Files Transformed: {
+                transform_stats.get(
+                    'files_generated',
+                    0)}")
         logger.info(f"   Rows Loaded: {load_stats.get('rows_loaded', 0)}")
         return summary
 
@@ -307,5 +350,6 @@ def gtfs_full_etl():
         return "Cleanup completed"
 
     extract_result >> transform_result >> load_result >> summary >> final_cleanup()
+
 
 dag_instance = gtfs_full_etl()
