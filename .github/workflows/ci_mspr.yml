@@ -19,6 +19,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r ./api/requirements.txt
+          pip install pytest
       - name: Run tests
         run: |
           pytest
