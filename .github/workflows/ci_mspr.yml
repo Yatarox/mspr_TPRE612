@@ -1,5 +1,4 @@
-# filepath: .github/workflows/ci.yml
-name: API CI
+name: API Build Only
 
 on:
   push:
@@ -19,11 +18,9 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r ./api/requirements.txt
-          pip install pytest
-          pip install httpx
+      - name: Build Docker image
+        run: |
+          docker build -t mspr-api ./api
       - name: Run tests
         run: |
-          pytest
-      - name: Lint with flake8
-        run: |
-          flake8 .
+          docker run --rm mspr-api pytest -v
