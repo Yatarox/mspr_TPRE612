@@ -1,0 +1,61 @@
+name: CI All Services
+
+on:
+  push:
+    branches: [main, ETL, api, dashboard, database]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-matrix:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [api, etl, rail-dashboard]
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Lint Python (${{ matrix.service }})
+        if: matrix.service == 'api' || matrix.service == 'etl'
+        run: |
+          cd ${{ matrix.service }}
+          pip install flake8
+          flake8 .
+
+      - name: Audit Python dependencies (${{ matrix.service }})
+        if: matrix.service == 'api' || matrix.service == 'etl'
+        run: |
+          cd ${{ matrix.service }}
+          pip install pip-audit
+          pip-audit
+
+      - name: Test Python (${{ matrix.service }})
+        if: matrix.service == 'api' || matrix.service == 'etl'
+        run: |
+          cd ${{ matrix.service }}
+          pip install -r requirements.txt
+          pytest
+
+      # Frontend (rail-dashboard)
+      - name: Lint Dashboard
+        if: matrix.service == 'rail-dashboard'
+        run: |
+          cd rail-dashboard
+          npm install
+          npx eslint src
+
+      - name: Audit Dashboard dependencies
+        if: matrix.service == 'rail-dashboard'
+        run: |
+          cd rail-dashboard
+          npm audit --audit-level=moderate
+
+      - name: Build Dashboard
+        if: matrix.service == 'rail-dashboard'
+        run: |
+          cd rail-dashboard
+          npm run build
+
+      # Docker build for all services
+      - name: Build Docker image (${{ matrix.service }})
+        run: docker build -t ${{ matrix.service }}:${{ github.sha }} ./${{ matrix.service }}
