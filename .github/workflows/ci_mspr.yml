@@ -1,4 +1,4 @@
-name: API Build Only
+name: CI - API Build & Quality
 
 on:
   push:
@@ -7,28 +7,32 @@ on:
     branches: [main]
 
 jobs:
-  build:
+  build-and-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up Python
+      - name: 🛎️ Checkout repository
+        uses: actions/checkout@v3
+
+      - name: 🐍 Set up Python 3.11
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-      - name: Install dependencies
-        run: |
-          pip install -r ./api/requirements.txt
-      - name: Check dependencies for vulnerabilities
+
+      - name: 📦 Install dependencies
+        run: pip install -r ./api/requirements.txt
+
+      - name: 🔒 Check dependencies for vulnerabilities
         run: |
           pip install pip-audit
           pip-audit -r ./api/requirements.txt
-      - name: Build Docker image
-        run: |
-          docker build -t mspr-api ./api
-      - name: Run tests
-        run: |
-          docker run --rm mspr-api pytest -v
-      - name: SonarCloud Scan
+
+      - name: 🐳 Build Docker image
+        run: docker build -t mspr-api ./api
+
+      - name: 🧪 Run unit tests in Docker
+        run: docker run --rm mspr-api pytest -v
+
+      - name: 📊 SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@v2
         with:
           projectBaseDir: .
