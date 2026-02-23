@@ -13,15 +13,18 @@ DB_CONFIG = {
 
 pool = None
 
+
 async def init_db_pool():
     global pool
     pool = await aiomysql.create_pool(**DB_CONFIG, minsize=5, maxsize=20)
+
 
 async def close_db_pool():
     global pool
     if pool:
         pool.close()
         await pool.wait_closed()
+
 
 async def execute_query(query: str, params: tuple = ()):
     async with pool.acquire() as conn:

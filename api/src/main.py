@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from api.routes.dashboard import router as dashboard_router
 from models.database import init_db_pool, close_db_pool
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db_pool()
@@ -27,6 +28,7 @@ app.add_middleware(
 
 app.include_router(dashboard_router, prefix="/api", tags=["dashboard"])
 
+
 @app.get("/")
 def read_root():
     return {
@@ -34,6 +36,7 @@ def read_root():
         "version": "1.0.0",
         "docs": "/docs",
     }
+
 
 @app.get("/health")
 async def health_check():

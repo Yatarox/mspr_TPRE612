@@ -1,9 +1,10 @@
 from models.database import execute_query
 from datetime import datetime
 
+
 async def get_overview():
     query = """
-        SELECT 
+        SELECT
             COUNT(DISTINCT f.trip_sk) as total_trips,
             COUNT(DISTINCT f.route_sk) as total_routes,
             COUNT(DISTINCT f.agency_sk) as total_agencies,
@@ -17,9 +18,10 @@ async def get_overview():
     result = await execute_query(query)
     return result[0] if result else {}
 
+
 async def get_stats_by_country():
     query = """
-        SELECT 
+        SELECT
             COALESCE(c.country_code, 'UNKNOWN') as country,
             COALESCE(c.country_name, 'Unknown') as country_name,
             COUNT(DISTINCT f.trip_sk) as trip_count,
@@ -34,9 +36,10 @@ async def get_stats_by_country():
     """
     return await execute_query(query)
 
+
 async def get_stats_by_train_type():
     query = """
-        SELECT 
+        SELECT
             COALESCE(tt.train_type, 'Unknown') as train_type,
             COUNT(DISTINCT f.trip_sk) as trip_count,
             ROUND(SUM(f.distance_km), 2) as total_distance,
@@ -50,9 +53,10 @@ async def get_stats_by_train_type():
     """
     return await execute_query(query)
 
+
 async def get_stats_by_traction():
     query = """
-        SELECT 
+        SELECT
             COALESCE(tr.traction, 'Unknown') as traction,
             COUNT(DISTINCT f.trip_sk) as trip_count,
             ROUND(AVG(f.emission_gco2e_pkm), 2) as avg_emission_per_km,
@@ -64,9 +68,10 @@ async def get_stats_by_traction():
     """
     return await execute_query(query)
 
+
 async def get_stats_by_agency(limit: int):
     query = """
-        SELECT 
+        SELECT
             a.agency_name,
             COUNT(DISTINCT f.trip_sk) as trip_count,
             ROUND(SUM(f.distance_km), 2) as total_distance,
@@ -79,9 +84,10 @@ async def get_stats_by_agency(limit: int):
     """
     return await execute_query(query, (limit,))
 
+
 async def get_emissions_by_route(limit: int):
     query = """
-        SELECT 
+        SELECT
             r.route_name,
             a.agency_name,
             COUNT(DISTINCT f.trip_sk) as trip_count,
@@ -97,26 +103,33 @@ async def get_emissions_by_route(limit: int):
     """
     return await execute_query(query, (limit,))
 
-async def search_trips(origin, destination, train_type, min_distance, max_distance, limit):
+
+async def search_trips(
+        origin,
+        destination,
+        train_type,
+        min_distance,
+        max_distance,
+        limit):
     where_clauses = []
     params = []
 
     if origin:
         where_clauses.append("lo.stop_name LIKE %s")
         params.append(f"%{origin}%")
-    
+
     if destination:
         where_clauses.append("ld.stop_name LIKE %s")
         params.append(f"%{destination}%")
-    
+
     if train_type:
         where_clauses.append("tt.train_type = %s")
         params.append(train_type)
-    
+
     if min_distance:
         where_clauses.append("f.distance_km >= %s")
         params.append(min_distance)
-    
+
     if max_distance:
         where_clauses.append("f.distance_km <= %s")
         params.append(max_distance)
@@ -125,7 +138,7 @@ async def search_trips(origin, destination, train_type, min_distance, max_distan
     params.append(limit)
 
     query = f"""
-        SELECT 
+        SELECT
             t.trip_id,
             r.route_name,
             a.agency_name,
@@ -158,8 +171,9 @@ async def search_trips(origin, destination, train_type, min_distance, max_distan
         ORDER BY f.distance_km DESC
         LIMIT %s
     """
-    
+
     return await execute_query(query, tuple(params))
+
 
 async def get_health():
     try:
