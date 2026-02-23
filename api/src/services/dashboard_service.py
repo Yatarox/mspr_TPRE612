@@ -137,47 +137,38 @@ async def search_trips(
     where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
     params.append(limit)
 
-    query = f"""
-        SELECT
-            t.trip_id,
-            r.route_name,
-            a.agency_name,
-            lo.stop_name as origin,
-            ld.stop_name as destination,
-            co.country_code as origin_country,
-            cd.country_code as destination_country,
-            tdep.time_value as departure_time,
-            tarr.time_value as arrival_time,
-            f.distance_km,
-            f.duration_h,
-            tt.train_type,
-            tr.traction,
-            f.emission_gco2e_pkm,
-            f.total_emission_kgco2e,
-            f.frequency_per_week
-        FROM fact_trip_summary f
-        JOIN dim_trip t ON t.trip_sk = f.trip_sk
-        JOIN dim_route r ON r.route_sk = f.route_sk
-        JOIN dim_agency a ON a.agency_sk = f.agency_sk
-        LEFT JOIN dim_location lo ON lo.location_sk = f.origin_location_sk
-        LEFT JOIN dim_location ld ON ld.location_sk = f.destination_location_sk
-        LEFT JOIN dim_country co ON co.country_sk = f.origin_country_sk
-        LEFT JOIN dim_country cd ON cd.country_sk = f.destination_country_sk
-        LEFT JOIN dim_time tdep ON tdep.time_sk = f.departure_time_sk
-        LEFT JOIN dim_time tarr ON tarr.time_sk = f.arrival_time_sk
-        LEFT JOIN dim_train_type tt ON tt.train_type_sk = f.train_type_sk
-        LEFT JOIN dim_traction tr ON tr.traction_sk = f.traction_sk
-        WHERE {where_sql}
-        ORDER BY f.distance_km DESC
-        LIMIT %s
-    """
+    query = (
+        "SELECT t.trip_id, r.route_name, a.agency_name, lo.stop_name as origin, "
+        "ld.stop_name as destination, co.country_code as origin_country, "
+        "cd.country_code as destination_country, tdep.time_value as departure_time, "
+        "tarr.time_value as arrival_time, f.distance_km, f.duration_h, tt.train_type, "
+        "tr.traction, f.emission_gco2e_pkm, f.total_emission_kgco2e, "
+        "f.frequency_per_week "
+        "FROM fact_trip_summary f "
+        "JOIN dim_trip t ON t.trip_sk = f.trip_sk "
+        "JOIN dim_route r ON r.route_sk = f.route_sk "
+        "JOIN dim_agency a ON a.agency_sk = f.agency_sk "
+        "LEFT JOIN dim_location lo ON lo.location_sk = f.origin_location_sk "
+        "LEFT JOIN dim_location ld ON ld.location_sk = f.destination_location_sk "
+        "LEFT JOIN dim_country co ON co.country_sk = f.origin_country_sk "
+        "LEFT JOIN dim_country cd ON cd.country_sk = f.destination_country_sk "
+        "LEFT JOIN dim_time tdep ON tdep.time_sk = f.departure_time_sk "
+        "LEFT JOIN dim_time tarr ON tarr.time_sk = f.arrival_time_sk "
+        "LEFT JOIN dim_train_type tt ON tt.train_type_sk = f.train_type_sk "
+        "LEFT JOIN dim_traction tr ON tr.traction_sk = f.traction_sk "
+        f"WHERE {where_sql} "
+        "ORDER BY f.distance_km DESC "
+        "LIMIT %s"
+    )
 
     return await execute_query(query, tuple(params))
 
 
 async def get_health():
     try:
-        result = await execute_query("SELECT COUNT(*) as count FROM fact_trip_summary")
+        result = await execute_query(
+            "SELECT COUNT(*) as count FROM fact_trip_summary"
+        )
         return {
             "status": "healthy",
             "database": "connected",
