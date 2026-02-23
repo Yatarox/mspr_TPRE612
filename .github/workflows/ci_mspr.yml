@@ -20,6 +20,7 @@ jobs:
         run: |
           pip install -r ./api/requirements.txt
           pip install pytest
+          pip install httpx
       - name: Run tests
         run: |
           pytest
