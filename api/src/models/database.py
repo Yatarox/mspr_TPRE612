@@ -27,6 +27,7 @@ async def close_db_pool():
 
 
 async def execute_query(query: str, params: tuple = ()):
+    global pool
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cursor:
             await cursor.execute(query, params)

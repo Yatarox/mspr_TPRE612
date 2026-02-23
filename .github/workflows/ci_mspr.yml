@@ -7,55 +7,91 @@ on:
     branches: [main]
 
 jobs:
-  build-matrix:
+  lint-api:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        service: [api, etl, rail-dashboard]
     steps:
       - uses: actions/checkout@v3
-
-      - name: Lint Python (${{ matrix.service }})
-        if: matrix.service == 'api' || matrix.service == 'etl'
+      - name: Lint API
         run: |
-          cd ${{ matrix.service }}
+          cd api
           pip install flake8
           flake8 .
 
-      - name: Audit Python dependencies (${{ matrix.service }})
-        if: matrix.service == 'api' || matrix.service == 'etl'
+  audit-api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Audit API dependencies
         run: |
-          cd ${{ matrix.service }}
+          cd api
           pip install pip-audit
           pip-audit
 
-      - name: Test Python (${{ matrix.service }})
-        if: matrix.service == 'api' || matrix.service == 'etl'
+  test-api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Test API
         run: |
-          cd ${{ matrix.service }}
+          cd api
           pip install -r requirements.txt
           pytest
 
-      # Frontend (rail-dashboard)
+  lint-etl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Lint ETL
+        run: |
+          cd etl
+          pip install flake8
+          flake8 .
+
+  audit-etl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Audit ETL dependencies
+        run: |
+          cd etl
+          pip install pip-audit
+          pip-audit
+
+  test-etl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Test ETL
+        run: |
+          cd etl
+          pip install -r requirements.txt
+          pytest
+
+  lint-dashboard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
       - name: Lint Dashboard
-        if: matrix.service == 'rail-dashboard'
         run: |
           cd rail-dashboard
           npm install
           npx eslint src
 
+  audit-dashboard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
       - name: Audit Dashboard dependencies
-        if: matrix.service == 'rail-dashboard'
         run: |
           cd rail-dashboard
           npm audit --audit-level=moderate
 
+  build-dashboard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
       - name: Build Dashboard
-        if: matrix.service == 'rail-dashboard'
         run: |
           cd rail-dashboard
+          npm install
           npm run build
-
-      # Docker build for all services
-      - name: Build Docker image (${{ matrix.service }})
-        run: docker build -t ${{ matrix.service }}:${{ github.sha }} ./${{ matrix.service }}
