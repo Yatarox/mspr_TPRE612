@@ -25,10 +25,11 @@ jobs:
         run: |
           pip install ruff
           ruff check ./etl/scripts
-
+          
       - name: 🧪 Run unit tests with coverage
         run: |
           pip install pytest pytest-cov
+          export PYTHONPATH=$PYTHONPATH:./etl/scripts
           pytest --cov=etl/scripts --cov-report=xml etl/scripts/
 
       - name: 📤 Upload coverage report
