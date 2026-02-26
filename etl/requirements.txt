@@ -4,3 +4,4 @@ pyproj
 rtree
 fiona
 pandas
+psutil
