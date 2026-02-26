@@ -33,7 +33,7 @@ def get_latest_gtfs_from_api(base_url: str) -> Optional[Dict[str, str]]:
                         "updated_at": updated_at,
                         "format": payload.get("format"),
                     }
-        logger.error(f"No GTFS file found in first 5 history items")
+        logger.error("No GTFS file found in first 5 history items")
         return None
     except requests.RequestException as e:
         logger.error(f"Failed to fetch from API {base_url}: {e}")
