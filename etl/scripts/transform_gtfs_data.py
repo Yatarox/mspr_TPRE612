@@ -1,4 +1,3 @@
-import math
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 import pandas as pd
@@ -145,7 +144,9 @@ def parse_gtfs_time_to_sec(t: str) -> Optional[int]:
         return None
     parts = t.strip().split(":")
     try:
-        h = int(parts[0]); m = int(parts[1]) if len(parts) > 1 else 0; s = int(parts[2]) if len(parts) > 2 else 0
+        h = int(parts[0])
+        m = int(parts[1]) if len(parts) > 1 else 0
+        s = int(parts[2]) if len(parts) > 2 else 0
         return h * 3600 + m * 60 + s
     except Exception:
         return None
@@ -163,9 +164,12 @@ def classifier_train(departure_time: str) -> str:
 
 def haversine_km(lat1, lon1, lat2, lon2):
     R = 6371.0
-    lat1 = np.radians(lat1); lon1 = np.radians(lon1)
-    lat2 = np.radians(lat2); lon2 = np.radians(lon2)
-    dlat = lat2 - lat1; dlon = lon2 - lon1
+    lat1 = np.radians(lat1)
+    lon1 = np.radians(lon1)
+    lat2 = np.radians(lat2)
+    lon2 = np.radians(lon2)
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
     a = np.sin(dlat/2)**2 + np.cos(lat1)*np.cos(lat2)*np.sin(dlon/2)**2
     return 2 * R * np.arcsin(np.sqrt(a))
 

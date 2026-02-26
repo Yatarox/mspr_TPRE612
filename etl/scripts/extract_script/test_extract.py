@@ -1,13 +1,10 @@
 import os
 import tempfile
-import json
-import pytest
 
 from scripts.extract_script.gtfs_utils import (
     calculate_file_hash,
     check_if_already_extracted,
-    write_metadata,
-    GTFS_FILES
+    write_metadata
 )
 
 def test_calculate_file_hash():

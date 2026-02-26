@@ -326,7 +326,7 @@ def gtfs_full_etl():
             ])
         }
         structured_logger.log_event("pipeline_completed", **summary)
-        logger.info(f"📊 PIPELINE SUMMARY:")
+        logger.info("📊 PIPELINE SUMMARY:")
         logger.info(f"   Total Duration: {total_duration:.2f}s")
         logger.info(
             f"   Files Downloaded: {
