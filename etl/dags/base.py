@@ -1,14 +1,14 @@
 import sys
-import os
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
-from scripts.load_gtfs import load_gtfs
-from scripts.transform_gtfs_data import transform_gtfs
+sys.path.append('/opt/airflow')
+
 from scripts.extract_gtfs_data_gouv_script import (
     build_download_list,
     download_and_extract_gtfs,
     download_and_unzip_from_zip_urls,
     clean_old_downloads
 )
+from scripts.load_gtfs import load_gtfs
+from scripts.transform_gtfs_data import transform_gtfs
 from datetime import datetime
 import json
 import logging
