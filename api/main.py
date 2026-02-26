@@ -1,34 +1,54 @@
+# --- 1. LES OUTILS (On prépare notre cuisine) ---
 from fastapi import FastAPI, Depends
-from sqlalchemy.orm import Session
-# Ici on importerait SessionLocal (ton fichier de connexion) et le modèle Trip (ton fichier model)
+from sqlalchemy import create_engine, Column, Integer, String, Float
+from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
+# --- 2. LE CHEMIN VERS LE FRIGO (La connexion à la base de données) ---
+URL_BASE_DE_DONNEES = "mysql+pymysql://root:root@mysql:3306/rail_dw"
+
+moteur = create_engine(URL_BASE_DE_DONNEES)
+SessionLocale = sessionmaker(autocommit=False, autoflush=False, bind=moteur)
+Base = declarative_base()
+
+# --- 3. LE PLAN DE LA BOÎTE (Comment est rangé un trajet dans le frigo) ---
+class Trajet(Base):
+    __tablename__ = "v_api_trips" 
+
+    fact_id = Column(Integer, primary_key=True, index=True)
+    trip_id = Column(String)
+    route_name = Column(String)
+    agency_name = Column(String)
+    service_type = Column(String)
+    origin = Column(String)
+    destination = Column(String)
+    departure_time = Column(String)
+    arrival_time = Column(String)
+    distance_km = Column(Float)
+    duration_h = Column(Float)
+
+# --- 4. LE RESTAURANT (Création de l'API) ---
 app = FastAPI(title="API ObRail Europe")
 
-# Fonction pour ouvrir et fermer la connexion à chaque requête
-def get_db():
-    db = SessionLocal()
+def obtenir_base_de_donnees():
+    db = SessionLocale()
     try:
         yield db
     finally:
         db.close()
 
-# Création de la route avec nos filtres dans le query string
+# --- 5. LE GUICHETIER (La route pour poser des questions) ---
 @app.get("/api/trajets")
-def get_trajets(
-    origin: str = None, # Paramètre optionnel dans l'URL (?origin=...)
-    destination: str = None, # Paramètre optionnel dans l'URL (?destination=...)
-    db: Session = Depends(get_db)
+def lire_les_trajets(
+    origin: str = None, 
+    destination: str = None, 
+    db: Session = Depends(obtenir_base_de_donnees)
 ):
-    # On prépare la requête de base (SELECT * FROM v_api_trips)
-    query = db.query(Trip)
+    recherche = db.query(Trajet)
     
-    # Si l'utilisateur a rempli le paramètre origin, on filtre
     if origin:
-        query = query.filter(Trip.origin == origin)
+        recherche = recherche.filter(Trajet.origin == origin)
         
-    # Si l'utilisateur a rempli le paramètre destination, on filtre
     if destination:
-        query = query.filter(Trip.destination == destination)
+        recherche = recherche.filter(Trajet.destination == destination)
         
-    # On exécute la requête et on renvoie une limite de 100 résultats
-    return query.limit(100).all()
+    return recherche.limit(100).all()
