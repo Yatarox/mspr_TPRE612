@@ -3,3 +3,8 @@ shapely
 pyproj
 rtree
 fiona
+
+fastapi
+uvicorn
+sqlalchemy
+pymysql
