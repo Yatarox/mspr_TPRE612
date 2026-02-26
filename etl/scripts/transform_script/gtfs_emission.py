@@ -1,4 +1,3 @@
-from typing import Optional
 
 
 def estimate_traction(route_type: str, route_name: str, agency_name: str, train_service: str) -> str:

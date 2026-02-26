@@ -3,7 +3,7 @@ import logging
 import json
 from pathlib import Path
 import pandas as pd
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

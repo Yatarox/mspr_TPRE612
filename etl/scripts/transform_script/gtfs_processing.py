@@ -1,6 +1,5 @@
 from typing import Dict, List, Optional, Tuple
 import pandas as pd
-from pathlib import Path
 from .gtfs_helpers import is_valid_numeric
 from .gtfs_emission import calculate_emissions, estimate_traction
 from .gtfs_frequency import calculate_frequency_per_week_intermediate
