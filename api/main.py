@@ -1,16 +1,15 @@
-# --- 1. LES OUTILS (On prépare notre cuisine) ---
 from fastapi import FastAPI, Depends
 from sqlalchemy import create_engine, Column, Integer, String, Float
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
-# --- 2. LE CHEMIN VERS LE FRIGO (La connexion à la base de données) ---
+# --- 1 La connexion à la base de données (EN GROS LE CHEMIN VERS LE FRIGO ) ---
 URL_BASE_DE_DONNEES = "mysql+pymysql://root:root@mysql:3306/rail_dw"
 
 moteur = create_engine(URL_BASE_DE_DONNEES)
 SessionLocale = sessionmaker(autocommit=False, autoflush=False, bind=moteur)
 Base = declarative_base()
 
-# --- 3. LE PLAN DE LA BOÎTE (Comment est rangé un trajet dans le frigo) ---
+# --- 2. Comment est rangé un trajet (LE PLAN DE LA BOÎTE, dans le frigo par exemple) ---
 class Trajet(Base):
     __tablename__ = "v_api_trips" 
 
@@ -26,7 +25,7 @@ class Trajet(Base):
     distance_km = Column(Float)
     duration_h = Column(Float)
 
-# --- 4. LE RESTAURANT (Création de l'API) ---
+# --- 3. Création de l'API (En gros le restaurant) ---
 app = FastAPI(title="API ObRail Europe")
 
 def obtenir_base_de_donnees():
@@ -36,7 +35,7 @@ def obtenir_base_de_donnees():
     finally:
         db.close()
 
-# --- 5. LE GUICHETIER (La route pour poser des questions) ---
+# --- 4. La route pour poser des questions (En gros le guichetier) ---
 @app.get("/api/trajets")
 def lire_les_trajets(
     origin: str = None, 
