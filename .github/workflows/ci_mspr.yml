@@ -37,8 +37,8 @@ jobs:
       - name: 🧪 Run unit tests with coverage
         run: |
           pip install pytest-cov
-          pytest --cov=api/src --cov-report=xml
-
+          pytest --cov=api/src --cov-report=xml api/tests
+          
       - name: 📤 Upload coverage report
         uses: actions/upload-artifact@v4
         with:
