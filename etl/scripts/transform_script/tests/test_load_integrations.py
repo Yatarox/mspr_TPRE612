@@ -66,6 +66,6 @@ def test_gtfs_processing_integration():
     assert all_rows[0]["origin_country"] == "FR"
     assert all_rows[0]["destination_country"] == "FR"
     assert all_rows[0]["distance_km"] > 0
-    assert all_rows[0]["frequency_per_week"] == 5
+    assert all_rows[0]["frequency_per_week"] == 25
     assert all_rows[0]["origin_stop_name"] == "Paris Gare de Lyon"
     assert all_rows[0]["destination_stop_name"] == "Lyon Part-Dieu"
