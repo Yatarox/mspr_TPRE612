@@ -5,4 +5,4 @@ rtree
 fiona
 pandas
 psutil
-airflow
+apache-airflow
