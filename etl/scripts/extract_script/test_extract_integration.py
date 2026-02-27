@@ -14,7 +14,7 @@ def test_download_gtfs_file_real():
 
 
 def test_get_latest_gtfs_from_api_real():
-    result = get_latest_gtfs_from_api()
+    result = get_latest_gtfs_from_api("https://transport.data.gouv.fr/api/datasets/6853c089b3ed5781f6adfdf7")
     assert isinstance(result, dict)
     assert "feeds" in result or "results" in result
 
