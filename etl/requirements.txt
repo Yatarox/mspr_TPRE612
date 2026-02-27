@@ -6,3 +6,4 @@ fiona
 pandas
 psutil
 apache-airflow
+apache-airflow-providers-mysql
