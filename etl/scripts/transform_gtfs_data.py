@@ -88,7 +88,7 @@ def build_trips_summary_for_dataset(staging_dir: str, dataset_id: str, processed
             stop_times_df["stop_sequence"] = pd.to_numeric(stop_times_df.get("stop_sequence"), errors="coerce").fillna(0).astype(int)
             stop_times_df["trip_id"] = stop_times_df["trip_id"].fillna("").astype(str)
             stop_times_df = stop_times_df[stop_times_df["trip_id"] != ""]
-            logger.info(f"  Computing distances and durations...")
+            logger.info("  Computing distances and durations...")
             distances_km = compute_distances(stop_times_df, stops_df)
             durations_min = compute_durations(stop_times_df)
             log_memory(f"After distance/duration for {dataset_id} - ")
