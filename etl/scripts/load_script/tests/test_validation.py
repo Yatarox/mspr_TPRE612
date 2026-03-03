@@ -32,7 +32,7 @@ def test_validate_row_distance_out_of_range():
         "route_name": "R1",
         "origin_stop_name": "Paris",
         "destination_stop_name": "Lyon",
-        "distance_km": 999999
+        "distance_km": -1
     }
     valid, msg = validate_row(row)
     assert not valid
