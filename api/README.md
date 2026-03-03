@@ -1,65 +1,142 @@
-# FastAPI Dashboard API
+# API Microservice - Rail DW
 
-This project is a FastAPI application that serves as a dashboard API. It provides endpoints for retrieving and updating dashboard metrics using an existing database and ETL processes.
+## Overview
 
-## Project Structure
+API REST pour accéder aux données du Data Warehouse Rail. Fournit des endpoints pour consulter les dashboards et les données agrégées des trajets ferroviaires.
+
+## Structure du projet
 
 ```
-fastapi-dashboard-api
-├── src
-│   ├── main.py                # Entry point of the FastAPI application
-│   ├── api                    # Contains API routes
+api/
+├── src/
+│   ├── api/
 │   │   ├── __init__.py
-│   │   └── routes
+│   │   └── routes/
 │   │       ├── __init__.py
-│   │       └── dashboard.py   # Dashboard API routes
-│   ├── models                 # Contains database models
+│   │       └── dashboard.py          # Endpoints REST
+│   ├── models/
 │   │   ├── __init__.py
-│   │   └── database.py        # Database connection and ORM models
-│   ├── schemas                # Contains Pydantic schemas
+│   │   └── database.py               # Gestion connexion BD
+│   ├── schemas/
 │   │   ├── __init__.py
-│   │   └── dashboard.py       # Request and response models for the dashboard API
-│   └── services               # Contains business logic
-│       ├── __init__.py
-│       └── dashboard_service.py # Logic for interacting with dashboard data
-├── requirements.txt           # Project dependencies
-└── README.md                  # Project documentation
+│   │   └── dashboard.py              # Schémas Pydantic
+│   ├── services/
+│   │   ├── __init__.py
+│   │   └── dashboard_service.py      # Logique métier
+│   └── main.py                       # Point d'entrée FastAPI
+├── tests/
+│   ├── test_dashboard_schema.py
+│   ├── test_dashboard_service.py
+│   └── test_main.py
+├── Dockerfile
+├── requirements.txt
+└── README.md
 ```
 
-## Setup Instructions
+## 📋 Fichiers et responsabilités
 
-1. Clone the repository:
-   ```
-   git clone <repository-url>
-   cd fastapi-dashboard-api
-   ```
+### **main.py**
+Point d'entrée de l'API FastAPI. Configure :
+- Lifecycle de l'application (init/close pool DB)
+- Middlewares CORS
+- Inclusion des routes
+- Endpoints de base (`/` et `/health`)
 
-2. Install the required dependencies:
-   ```
-   pip install -r requirements.txt
-   ```
+### **models/database.py**
+Gestion de la connexion à la base de données :
+- Configuration MySQL via variables d'environnement
+- Pool de connexions asynchrone (`aiomysql`)
+- Fonction `execute_query()` pour les requêtes SQL
 
-3. Run the FastAPI application:
-   ```
-   uvicorn src.main:app --reload
-   ```
+### **schemas/dashboard.py**
+Schémas de validation Pydantic :
+- `DashboardMetric` : modèle pour une métrique
+- `DashboardCreate` : validation des créations
+- `DashboardUpdate` : validation des mises à jour
+- `DashboardResponse` : format de réponse API
 
-4. Access the API documentation at `http://127.0.0.1:8000/docs`.
+### **services/dashboard_service.py**
+Logique métier (Business Logic) :
+- `get_overview()` : KPIs globaux (trajets, routes, agences, distances, émissions)
+- `get_stats_by_country()` : statistiques par pays d'origine
+- `get_stats_by_train_type()` : statistiques par type de train
+- `get_stats_by_traction()` : statistiques par type de traction
+- `get_stats_by_agency()` : top agences par nombre de trajets
+- `get_emissions_by_route()` : routes les plus émettrices
+- `search_trips()` : recherche de trajets avec filtres (origine, destination, type, distance)
+- `get_health()` : vérification de la santé de l'API
 
-## Usage Examples
+### **api/routes/dashboard.py**
+Endpoints REST exposant les services :
+- `GET /api/stats/overview` : KPIs généraux
+- `GET /api/stats/by-country` : données par pays
+- `GET /api/stats/by-train-type` : données par type de train
+- `GET /api/stats/by-traction` : données par traction
+- `GET /api/stats/by-agency` : top agences (limit paramétrable)
+- `GET /api/emissions/by-route` : routes émettrices (limit paramétrable)
+- `GET /api/trips/search` : recherche avec filtres (origin, destination, train_type, min/max_distance, limit)
 
-- **Get Dashboard Metrics**
-  - Endpoint: `GET /dashboard/metrics`
-  - Description: Retrieves the current metrics for the dashboard.
+## 🔄 Flux de requête
 
-- **Update Dashboard Metrics**
-  - Endpoint: `PUT /dashboard/metrics`
-  - Description: Updates the metrics for the dashboard with the provided data.
+```
+Client HTTP
+    ↓
+routes/dashboard.py (endpoint)
+    ↓
+services/dashboard_service.py (logique métier)
+    ↓
+models/database.py (requête SQL)
+    ↓
+MySQL (rail_dw)
+    ↓
+[réponse inverse]
+```
 
-## Contributing
+## Installation
 
-Contributions are welcome! Please open an issue or submit a pull request for any enhancements or bug fixes.
+### Prérequis
+- Python 3.9+
+- MySQL 8.0+
 
-## License
+### Setup
 
-This project is licensed under the MIT License.
+```bash
+pip install -r requirements.txt
+```
+
+### Variables d'environnement
+
+Créer un fichier `.env` :
+```
+MYSQL_HOST=localhost
+MYSQL_PORT=3306
+MYSQL_USER=root
+MYSQL_PASSWORD=root
+MYSQL_DATABASE=rail_dw
+```
+
+## Démarrage
+
+```bash
+python src/main.py
+```
+
+L'API sera accessible sur `http://localhost:8000`
+
+## Tests
+
+```bash
+pytest tests/
+```
+
+## Documentation
+
+Swagger UI : `http://localhost:8000/docs`
+ReDoc : `http://localhost:8000/redoc`
+
+## Docker
+
+```bash
+docker build -t rail-api .
+docker run -d -p 8000:8000 --env-file .env rail-api
+```

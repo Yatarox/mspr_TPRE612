@@ -1,92 +1,139 @@
-# ETL GTFS avec Airflow
+# ETL Microservice - Rail DW
 
-## Description
-Pipeline ETL pour extraire, transformer et charger des données GTFS (General Transit Feed Specification) avec Apache Airflow.
+## Overview
 
-## Prérequis
-- Docker
-- Docker Compose
+Ce microservice exécute un pipeline **ETL GTFS** :
+1. **Extract** : téléchargement des jeux GTFS (API data.gouv + URLs ZIP directes)
+2. **Transform** : génération de fichiers `trips_summary_*.csv`
+3. **Load** : chargement en base MySQL (staging + dimensions + table de faits)
+
+L’orchestration est faite avec **Apache Airflow**.
+
+---
 
 ## Structure du projet
-```
+
+```text
 etl/
 ├── dags/
-│   └── base.py              # DAG principal gtfs_full_etl
+│   └── base.py                         # DAG principal gtfs_full_etl
 ├── scripts/
 │   ├── extract_gtfs_data_gouv_script.py
 │   ├── transform_gtfs_data.py
-│   └── load_gtfs.py
-├── data/
-│   ├── raw/                 # Données brutes téléchargées
-│   ├── staging/             # Données dézippées
-│   └── processed/           # Données transformées
-├── logs/                    # Logs Airflow
-├── Dockerfile
-├── docker-compose.yml
-└── requirements.txt
+│   ├── load_gtfs.py
+│   ├── extract_script/                 # Fonctions extract (API, download, unzip, metadata…)
+│   ├── transform_script/               # Helpers transform (geo, time, fréquence, processing…)
+│   └── load_script/                    # Helpers load (staging, fact loader, cache dimensions…)
+└── README.md
 ```
 
-## Installation et Lancement
+---
 
-### 1. Cloner le projet
-```bash
-cd c:\Users\"CHANGME"\Desktop\ecole\mspr_TPRE612\etl
+## Fichiers principaux
+
+### `dags/base.py`
+Définit le DAG `gtfs_full_etl` avec les tâches :
+- `extract()`
+- `transform()`
+- `load()`
+- `pipeline_summary()`
+- `final_cleanup()`
+
+Gère aussi :
+- Variables Airflow (URLs, chemins, batch size, workers, etc.)
+- Logs structurés (métriques, événements, erreurs)
+
+---
+
+### `scripts/transform_gtfs_data.py`
+Transforme les fichiers GTFS (`agency.txt`, `routes.txt`, `trips.txt`, `stop_times.txt`, etc.) en CSV consolidés :
+- calcule distances / durées
+- enrichit avec pays d’origine/destination
+- calcule fréquences hebdo
+- écrit un `trips_summary_<dataset_id>.csv`
+
+Fonctions clés :
+- `build_trips_summary_for_dataset(...)`
+- `_write_csv(...)`
+- `transform_gtfs(...)`
+
+---
+
+### `scripts/load_gtfs.py`
+Charge les CSV transformés en base :
+- insertion en **staging**
+- chargement **set-based** vers dimensions + table de faits
+- gestion par batch pour limiter les verrous MySQL
+
+Fonction clé :
+- `load_gtfs(processed_dir, conn_id="mysql_default", batch_size=1000)`
+
+---
+
+### `scripts/extract_gtfs_data_gouv_script.py`
+Point d’entrée des utilitaires d’extraction GTFS (imports des modules extract) :
+- build des URLs à télécharger
+- download
+- unzip
+- nettoyage anciens fichiers
+
+---
+
+## Variables Airflow utilisées
+
+Dans `base.py`, principales variables :
+- `gtfs_base_urls`
+- `gtfs_base_url` (fallback)
+- `gtfs_zip_urls`
+- `gtfs_raw_dir`
+- `gtfs_staging_dir`
+- `gtfs_processed_dir`
+- `gtfs_db_conn_id`
+- `gtfs_force_download`
+- `gtfs_keep_latest_zips`
+- `gtfs_max_workers`
+- `gtfs_load_batch_size`
+
+---
+
+## Flux d’exécution
+
+```text
+Extract (ZIP/API) 
+  -> Transform (trips_summary CSV) 
+    -> Load (staging -> dimensions/fact) 
+      -> Summary
 ```
 
-### 2. Construire et lancer le conteneur
-```bash
-docker-compose up -d
-```
+---
 
-### 3. Accéder à l'interface Airflow
-- URL: http://localhost:8080
-- Username: `admin`
-- Password: 'voir dans les logs'
+## Lancement
 
-cmd pour trouver le mdp facilement
-```bash
-docker exec etl-airflowservice-1 cat /opt/airflow/simple_auth_manager_passwords.json.generated
-```
+### Avec Airflow
+Le DAG `gtfs_full_etl` est planifié en `@daily` (voir `dags/base.py`).
 
-### 4. Le DAG démarre automatiquement
-Le DAG `gtfs_full_etl` se lance automatiquement au démarrage avec `schedule="@once"`.
+### Exécution locale (scripts)
+Selon ton environnement Python/Airflow, les fonctions appelables sont :
+- `transform_gtfs(...)`
+- `load_gtfs(...)`
 
-## Arrêter le conteneur
-```bash
-docker-compose down
-```
+---
 
-## Redémarrer après modifications
-```bash
-docker-compose down
-docker-compose up -d --build
-```
+## Notes techniques
 
-## Configuration (Variables Airflow)
+- Transform optimisée pour gros volumes (chunks + split par agency)
+- Chargement MySQL en batch (`batch_size`) pour réduire risques de lock
+- Logging standard + logging structuré dans le DAG
+- Encodage UTF-8 recommandé sur toutes les étapes
 
-Vous pouvez configurer via l'interface Airflow (Admin > Variables) :
+---
 
-| Variable | Défaut | Description |
-|----------|--------|-------------|
-| `gtfs_base_urls` | URLs par défaut | Liste des URLs d'API (JSON ou CSV) |
-| `gtfs_raw_dir` | `/opt/airflow/data/raw` | Répertoire données brutes |
-| `gtfs_staging_dir` | `/opt/airflow/data/staging` | Répertoire staging |
-| `gtfs_processed_dir` | `/opt/airflow/data/processed` | Répertoire données transformées |
-| `gtfs_db_conn_id` | None | Connexion DB pour le load |
+## Modules complémentaires
 
-## Logs et Debugging
+Le projet contient d’autres fonctions dans :
+- `scripts/extract_script/*`
+- `scripts/transform_script/*`
+- `scripts/load_script/*`
 
-### Voir les logs du conteneur
-```bash
-docker-compose logs -f airflowservice
-```
-
-### Voir les logs d'une tâche
-Les logs sont accessibles via l'interface Airflow ou dans `./logs/`
-
-
-### Relancer manuellement le DAG
-Via l'interface Airflow, cliquez sur le bouton "Play" à droite du DAG.
-
-### result dans 
-le dossier data/processed
+Elles couvrent les helpers spécialisés (API, géo, fréquence, temps, staging/fact, cache dimensions).
+Ce README documente le **fonctionnement global** et les **points d’entrée** principaux.
