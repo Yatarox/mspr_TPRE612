@@ -9,6 +9,7 @@ services:
     environment:
       - MYSQL_ROOT_PASSWORD=root
       - MYSQL_DATABASE=rail_dw
+    command: --innodb_buffer_pool_size=2G --innodb_lock_wait_timeout=50 --max_connections=200 --innodb_flush_log_at_trx_commit=2
     volumes:
       - mysql-data:/var/lib/mysql
     networks:
@@ -28,6 +29,12 @@ services:
     environment:
       - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=False
       - AIRFLOW_CONN_MYSQL_DEFAULT=mysql://root:root@mysql:3306/rail_dw
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+        reservations:
+          memory: 2G
     depends_on:
       mysql:
         condition: service_healthy

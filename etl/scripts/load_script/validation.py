@@ -18,7 +18,7 @@ def validate_row(row: Dict[str, Any]) -> Tuple[bool, str]:
     try:
         if pd.notna(row.get("distance_km")):
             d = float(row["distance_km"])
-            if d < 0 or d > 20_000:
+            if d < 0:
                 return False, f"distance_km out of range: {d}"
     except Exception:
         return False, "distance_km not numeric"

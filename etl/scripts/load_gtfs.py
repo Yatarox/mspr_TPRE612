@@ -21,29 +21,6 @@ VERSION = "load_gtfs.py v3.0 (auto-create dim_country, set-based fact load)"
 logger.info(f"[BOOT] {VERSION}")
 
 
-
-
-# ============================================================
-# Validation
-# ============================================================
-
-
-
-
-
-
-# ============================================================
-# Set-based dimension upsert + fact load (rapide)
-# ============================================================
-
-
-
-
-# ============================================================
-# Entrée principale
-# ============================================================
-
-
 def load_gtfs(processed_dir: str,
               conn_id: str = "mysql_default") -> Dict[str, Any]:
     hook = MySqlHook(mysql_conn_id=conn_id)
@@ -61,8 +38,8 @@ def load_gtfs(processed_dir: str,
         try:
             dataset_id = int(dataset_dir.name)
         except ValueError:
-            logger.warning(f"Skipping invalid directory: {dataset_dir.name}")
-            continue
+            dataset_id = dataset_dir.name
+            logger.info(f"Using UUID as dataset_id: {dataset_id}")
 
         load_id = int(datetime.now().timestamp() * 1000)
 
@@ -76,8 +53,9 @@ def load_gtfs(processed_dir: str,
 
         if not csv_path.exists():
             logger.error(f"Available files in {dataset_dir}:")
-            for f in dataset_dir.glob("*"):
+            for f in dataset_dir.rglob("*"):
                 logger.error(f"  - {f.name}")
+            continue 
 
         loaded = load_staging_table(
             hook,
@@ -86,6 +64,7 @@ def load_gtfs(processed_dir: str,
             dataset_id,
             origin_max_len,
             dest_max_len)
+        
         if loaded == 0:
             logger.warning(f"No data for dataset {dataset_id}")
             dim_cache.clear()

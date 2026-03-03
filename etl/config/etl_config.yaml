@@ -11,7 +11,7 @@ transform:
   memory_limit_mb: 4096
 
 load:
-  batch_size: 1000
+  batch_size: 5000
   cache_size: 10000
   validate_data: true
   max_errors_per_file: 100

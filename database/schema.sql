@@ -10,7 +10,7 @@ USE rail_dw;
 DROP TABLE IF EXISTS dim_dataset;
 CREATE TABLE dim_dataset (
   dataset_sk BIGINT AUTO_INCREMENT PRIMARY KEY,
-  dataset_id INT NOT NULL,
+  dataset_id VARCHAR(255) NOT NULL,
   UNIQUE KEY uq_dim_dataset_id (dataset_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -71,9 +71,10 @@ CREATE TABLE dim_location (
   location_sk BIGINT AUTO_INCREMENT PRIMARY KEY,
   stop_name VARCHAR(255) NOT NULL,
   country_code VARCHAR(10),
-  UNIQUE KEY uq_dim_location_name (stop_name),
-  KEY fk_dim_location_country (country_code),
-  CONSTRAINT fk_dim_location_country FOREIGN KEY (country_code) REFERENCES dim_country(country_code)
+  UNIQUE KEY uq_dim_location_name_country (stop_name, country_code),
+  KEY idx_dim_location_country (country_code),
+  CONSTRAINT fk_dim_location_country
+    FOREIGN KEY (country_code) REFERENCES dim_country(country_code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 DROP TABLE IF EXISTS dim_time;
@@ -112,22 +113,25 @@ CREATE TABLE fact_trip_summary (
   frequency_per_week INT,
   last_load_id BIGINT,
   last_loaded_at DATETIME,
-  UNIQUE KEY uq_fact_trip (trip_sk),
+
+  UNIQUE KEY uq_fact_trip_dataset (trip_sk, dataset_sk),
   KEY idx_fact_route (route_sk),
   KEY idx_fact_agency (agency_sk),
-  CONSTRAINT fk_fact_trip      FOREIGN KEY (trip_sk)      REFERENCES dim_trip(trip_sk),
-  CONSTRAINT fk_fact_dataset   FOREIGN KEY (dataset_sk)   REFERENCES dim_dataset(dataset_sk),
-  CONSTRAINT fk_fact_route     FOREIGN KEY (route_sk)     REFERENCES dim_route(route_sk),
-  CONSTRAINT fk_fact_agency    FOREIGN KEY (agency_sk)    REFERENCES dim_agency(agency_sk),
-  CONSTRAINT fk_fact_service   FOREIGN KEY (service_sk)   REFERENCES dim_service_type(service_sk),
-  CONSTRAINT fk_fact_train     FOREIGN KEY (train_type_sk)REFERENCES dim_train_type(train_type_sk),
-  CONSTRAINT fk_fact_traction  FOREIGN KEY (traction_sk)  REFERENCES dim_traction(traction_sk),
-  CONSTRAINT fk_fact_origin_loc FOREIGN KEY (origin_location_sk) REFERENCES dim_location(location_sk),
-  CONSTRAINT fk_fact_dest_loc   FOREIGN KEY (destination_location_sk) REFERENCES dim_location(location_sk),
-  CONSTRAINT fk_fact_origin_cty FOREIGN KEY (origin_country_sk) REFERENCES dim_country(country_sk),
-  CONSTRAINT fk_fact_dest_cty   FOREIGN KEY (destination_country_sk) REFERENCES dim_country(country_sk),
-  CONSTRAINT fk_fact_dep_time   FOREIGN KEY (departure_time_sk) REFERENCES dim_time(time_sk),
-  CONSTRAINT fk_fact_arr_time   FOREIGN KEY (arrival_time_sk)  REFERENCES dim_time(time_sk)
+  KEY idx_fact_last_load (last_load_id),
+
+  CONSTRAINT fk_fact_trip        FOREIGN KEY (trip_sk) REFERENCES dim_trip(trip_sk),
+  CONSTRAINT fk_fact_dataset     FOREIGN KEY (dataset_sk) REFERENCES dim_dataset(dataset_sk),
+  CONSTRAINT fk_fact_route       FOREIGN KEY (route_sk) REFERENCES dim_route(route_sk),
+  CONSTRAINT fk_fact_agency      FOREIGN KEY (agency_sk) REFERENCES dim_agency(agency_sk),
+  CONSTRAINT fk_fact_service     FOREIGN KEY (service_sk) REFERENCES dim_service_type(service_sk),
+  CONSTRAINT fk_fact_train       FOREIGN KEY (train_type_sk) REFERENCES dim_train_type(train_type_sk),
+  CONSTRAINT fk_fact_traction    FOREIGN KEY (traction_sk) REFERENCES dim_traction(traction_sk),
+  CONSTRAINT fk_fact_origin_loc  FOREIGN KEY (origin_location_sk) REFERENCES dim_location(location_sk),
+  CONSTRAINT fk_fact_dest_loc    FOREIGN KEY (destination_location_sk) REFERENCES dim_location(location_sk),
+  CONSTRAINT fk_fact_origin_cty  FOREIGN KEY (origin_country_sk) REFERENCES dim_country(country_sk),
+  CONSTRAINT fk_fact_dest_cty    FOREIGN KEY (destination_country_sk) REFERENCES dim_country(country_sk),
+  CONSTRAINT fk_fact_dep_time    FOREIGN KEY (departure_time_sk) REFERENCES dim_time(time_sk),
+  CONSTRAINT fk_fact_arr_time    FOREIGN KEY (arrival_time_sk) REFERENCES dim_time(time_sk)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- =========================================================
@@ -135,9 +139,10 @@ CREATE TABLE fact_trip_summary (
 -- =========================================================
 DROP TABLE IF EXISTS stg_trips_summary;
 CREATE TABLE stg_trips_summary (
+  stg_id BIGINT AUTO_INCREMENT PRIMARY KEY,
   load_id BIGINT NOT NULL,
   loaded_at DATETIME NOT NULL,
-  dataset_id INT NOT NULL,
+  dataset_id VARCHAR(255),
   trip_id VARCHAR(255),
   route_id VARCHAR(64),
   route_name VARCHAR(255),
@@ -145,7 +150,7 @@ CREATE TABLE stg_trips_summary (
   agency_name VARCHAR(255),
   service_type VARCHAR(64),
   origin_stop_name VARCHAR(255),
-  origin_country VARCHAR(30), 
+  origin_country VARCHAR(30),
   destination_stop_name VARCHAR(255),
   destination_country VARCHAR(30),
   departure_time VARCHAR(16),
@@ -158,5 +163,8 @@ CREATE TABLE stg_trips_summary (
   emission_gco2e_pkm DECIMAL(10,3),
   total_emission_kgco2e DECIMAL(10,3),
   frequency_per_week INT,
-  KEY idx_stg_load (load_id)
+
+  KEY idx_stg_load (load_id),
+  KEY idx_stg_load_stgid (load_id, stg_id),
+  KEY idx_stg_load_trip (load_id, trip_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
