@@ -145,7 +145,7 @@ def build_trips_summary_for_dataset(staging_dir: str, dataset_id: str, processed
         all_rows: List[Dict] = []
 
         if len(trips) > 500_000:
-            logger.info(f"  Large dataset, splitting by agency...")
+            logger.info("  Large dataset, splitting by agency...")
             agencies_split = split_by_agency(trips)
             for agency_id, trips_chunk in agencies_split.items():
                 logger.info(f"    Processing agency {agency_id} with {len(trips_chunk)} trips...")
@@ -227,7 +227,6 @@ def transform_gtfs(staging_dir: str, processed_dir: str, max_workers: int = 4) -
 
     logger.info(f"🚀 Starting transform for {len(datasets)} datasets (max_workers={max_workers})")
     
-    # Parallel processing with ProcessPoolExecutor
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
         futures = {
             executor.submit(build_trips_summary_for_dataset, staging_dir, ds.name, processed_dir): ds.name 
@@ -237,7 +236,7 @@ def transform_gtfs(staging_dir: str, processed_dir: str, max_workers: int = 4) -
         for future in as_completed(futures):
             ds_name = futures[future]
             try:
-                count = future.result(timeout=600)  # 10 min timeout per dataset
+                count = future.result(timeout=600)
                 if count > 0:
                     out_csv = Path(processed_dir) / ds_name / f"trips_summary_{ds_name}.csv"
                     written.append(str(out_csv))
