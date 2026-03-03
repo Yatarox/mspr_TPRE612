@@ -74,6 +74,18 @@ def _parse_urls(value: str) -> List[str]:
     return [p.strip() for p in raw.replace("\n", ",").split(",") if p.strip()]
 
 
+def _set_variable_if_missing(key: str, value: str) -> None:
+    """
+    Create Variable in Airflow UI if it does not already exist.
+    Compatible Airflow 3: avoid exception-based flow.
+    """
+    marker = "__MISSING__"
+    current = Variable.get(key, default_var=marker)
+    if current == marker:
+        Variable.set(key, value)
+        logger.info(f"Created Airflow Variable '{key}' with default value.")
+
+
 default_args = {
     "owner": "airflow",
     "retries": 2,
@@ -109,16 +121,15 @@ def gtfs_full_etl():
         "https://www.data.gouv.fr/api/1/datasets/r/b2dfbaa3-47e9-4749-b6a4-750bebd760e7",
     ]
 
-    # URLs
-    urls_str = Variable.get("gtfs_base_urls", default_var=None)
-    if urls_str:
-        base_urls = _parse_urls(urls_str)
-    else:
-        single = Variable.get("gtfs_base_url", default_var=None)
-        base_urls = [single] if single else default_urls
+    _set_variable_if_missing("gtfs_base_urls", json.dumps(default_urls, ensure_ascii=False))
+    _set_variable_if_missing("gtfs_zip_urls", json.dumps(default_zip_urls, ensure_ascii=False))
 
-    zip_urls_str = Variable.get("gtfs_zip_urls", default_var=None)
-    zip_urls = _parse_urls(zip_urls_str) if zip_urls_str else default_zip_urls
+    # URLs from Variables
+    urls_str = Variable.get("gtfs_base_urls", default_var="")
+    base_urls = _parse_urls(urls_str) or default_urls
+
+    zip_urls_str = Variable.get("gtfs_zip_urls", default_var="")
+    zip_urls = _parse_urls(zip_urls_str) or default_zip_urls
 
     # Paths / DB
     raw_dir = Variable.get("gtfs_raw_dir", default_var="/opt/airflow/data/raw")
