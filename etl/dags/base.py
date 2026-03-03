@@ -119,6 +119,7 @@ def gtfs_full_etl():
 
     default_zip_urls = [
         "https://www.data.gouv.fr/api/1/datasets/r/b2dfbaa3-47e9-4749-b6a4-750bebd760e7",
+        "https://www.data.gouv.fr/api/1/datasets/r/eae0fa46-087a-4018-ada9-d8add124e635"
     ]
 
     _set_variable_if_missing("gtfs_base_urls", json.dumps(default_urls, ensure_ascii=False))
