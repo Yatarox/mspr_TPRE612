@@ -75,86 +75,105 @@ function Dashboard() {
     [tractionStats]
   )
 
-  const summaryCards = useMemo(
+  const cards = useMemo(
     () => [
       {
         title: 'Total trajets',
         value: formatInteger(overview?.total_trips),
         icon: '🚆',
-        helperText: 'Volume global des trajets enregistrés.'
-      },
-      {
-        title: 'Routes',
-        value: formatInteger(overview?.total_routes),
-        icon: '🛤️',
-        helperText: 'Nombre d’itinéraires distincts disponibles.'
+        helperText: 'Volume global des trajets disponibles dans la base.',
+        accent: 'blue',
+        featured: true
       },
       {
         title: 'Distance totale',
         value: `${formatInteger(overview?.total_distance_km)} km`,
         icon: '📏',
-        helperText: 'Distance cumulée sur l’ensemble des trajets.'
+        helperText: 'Distance cumulée de l’ensemble des trajets analysés.',
+        accent: 'navy',
+        featured: true
+      },
+      {
+        title: 'Routes',
+        value: formatInteger(overview?.total_routes),
+        icon: '🛤️',
+        helperText: 'Nombre d’itinéraires distincts.',
+        accent: 'slate'
       },
       {
         title: 'Émissions CO2',
         value: `${formatInteger(overview?.total_emissions_kg)} kg`,
         icon: '🌍',
-        helperText: 'Émissions consolidées sur la base analysée.'
+        helperText: 'Total des émissions consolidées.',
+        accent: 'teal'
       },
       {
         title: 'Distance moyenne',
         value: `${formatDecimal(overview?.avg_distance_km, 1)} km`,
         icon: '📊',
-        helperText: 'Distance moyenne observée par trajet.'
+        helperText: 'Distance moyenne observée par trajet.',
+        accent: 'gold'
       },
       {
         title: 'Durée moyenne',
         value: `${formatDecimal(overview?.avg_duration_h, 2)} h`,
         icon: '⏱️',
-        helperText: 'Temps moyen constaté pour un trajet.'
+        helperText: 'Temps moyen constaté sur les trajets.',
+        accent: 'slate'
       }
     ],
     [overview]
   )
 
-  const heroMetrics = useMemo(
+  const spotlight = useMemo(
     () => [
       {
-        label: 'Trajets enregistrés',
-        value: formatInteger(overview?.total_trips),
-        meta: 'Base consolidée'
-      },
-      {
-        label: 'Pays le plus représenté',
+        label: 'Pays dominant',
         value: sortedCountryStats[0]?.country || '—',
         meta: sortedCountryStats[0]
           ? `${formatInteger(sortedCountryStats[0]?.trip_count)} trajets`
-          : 'Pas de donnée'
+          : 'Aucune donnée'
       },
       {
-        label: 'Type de train dominant',
+        label: 'Train dominant',
         value: sortedTrainTypeStats[0]?.train_type || '—',
         meta: sortedTrainTypeStats[0]
           ? `${formatInteger(sortedTrainTypeStats[0]?.trip_count)} trajets`
-          : 'Pas de donnée'
+          : 'Aucune donnée'
       },
       {
-        label: 'CO2 total',
-        value: `${formatInteger(overview?.total_emissions_kg)} kg`,
-        meta: 'Vision environnementale'
+        label: 'Traction la plus émissive',
+        value: sortedTractionStats[0]?.traction || '—',
+        meta: sortedTractionStats[0]
+          ? `${formatDecimal(sortedTractionStats[0]?.avg_emission_per_km, 3)} kg / km`
+          : 'Aucune donnée'
       }
     ],
-    [overview, sortedCountryStats, sortedTrainTypeStats]
+    [sortedCountryStats, sortedTrainTypeStats, sortedTractionStats]
   )
 
   if (loading) {
-    return <LoadingDashboard />
+    return (
+      <div className="dashboard dashboard-loading">
+        <section className="premium-hero premium-skeleton" />
+        <section className="stats-grid">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <div key={index} className="stats-card premium-skeleton" />
+          ))}
+        </section>
+        <section className="charts-grid">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div key={index} className="chart-card premium-skeleton" />
+          ))}
+        </section>
+      </div>
+    )
   }
 
   if (error) {
     return (
       <div className="state-card error-state">
-        <span className="section-badge">Erreur</span>
+        <span className="section-pill">Connexion API</span>
         <h2>Impossible de charger le dashboard</h2>
         <p>{error}</p>
         <button type="button" className="primary-button" onClick={fetchData}>
@@ -166,23 +185,38 @@ function Dashboard() {
 
   return (
     <div className="dashboard">
-      <section className="hero-panel">
-        <div className="hero-copy">
-          <span className="section-badge">Vue d’ensemble</span>
-          <h2>Un dashboard lisible, sobre et prêt pour la restitution</h2>
+      <section className="premium-hero">
+        <div className="premium-hero-main">
+          <span className="section-pill">Vue exécutive</span>
+          <h2>Une lecture premium, claire et prête pour la présentation</h2>
           <p>
-            L’essentiel des données ferroviaires est regroupé ici : indicateurs clés,
-            répartitions principales et recherche ciblée pour retrouver rapidement les
-            trajets utiles pendant la démo.
+            Ce dashboard centralise les indicateurs essentiels, les répartitions
+            principales et la recherche de trajets dans une interface plus élégante,
+            plus structurée et plus professionnelle.
           </p>
+
+          <div className="premium-highlight-band">
+            <div className="highlight-item">
+              <span>Trajets analysés</span>
+              <strong>{formatInteger(overview?.total_trips)}</strong>
+            </div>
+            <div className="highlight-item">
+              <span>Routes distinctes</span>
+              <strong>{formatInteger(overview?.total_routes)}</strong>
+            </div>
+            <div className="highlight-item">
+              <span>CO2 total</span>
+              <strong>{formatInteger(overview?.total_emissions_kg)} kg</strong>
+            </div>
+          </div>
         </div>
 
-        <div className="hero-metrics">
-          {heroMetrics.map((metric) => (
-            <div className="hero-metric" key={metric.label}>
-              <span className="hero-metric-label">{metric.label}</span>
-              <strong className="hero-metric-value">{metric.value}</strong>
-              <span className="hero-metric-meta">{metric.meta}</span>
+        <div className="premium-hero-side">
+          {spotlight.map((item) => (
+            <div className="premium-side-card" key={item.label}>
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+              <small>{item.meta}</small>
             </div>
           ))}
         </div>
@@ -191,19 +225,22 @@ function Dashboard() {
       <section className="dashboard-section">
         <div className="section-heading">
           <div>
+            <span className="section-pill">KPIs</span>
             <h2>Indicateurs clés</h2>
-            <p>Les métriques à surveiller en priorité pour une lecture immédiate.</p>
+            <p>Des cartes plus élégantes, mieux hiérarchisées et plus faciles à lire.</p>
           </div>
         </div>
 
-        <div className="stats-grid">
-          {summaryCards.map((card) => (
+        <div className="stats-grid premium-stats-grid">
+          {cards.map((card) => (
             <StatsCard
               key={card.title}
               title={card.title}
               value={card.value}
               icon={card.icon}
               helperText={card.helperText}
+              accent={card.accent}
+              featured={card.featured}
             />
           ))}
         </div>
@@ -212,66 +249,50 @@ function Dashboard() {
       <section className="dashboard-section">
         <div className="section-heading">
           <div>
-            <h2>Répartition des données</h2>
-            <p>Une vue simple des volumes, catégories et niveaux d’émission.</p>
+            <span className="section-pill">Analyse visuelle</span>
+            <h2>Répartitions principales</h2>
+            <p>Une visualisation plus sobre et plus premium des grandes tendances.</p>
           </div>
         </div>
 
         <div className="charts-grid">
           <ChartCard
             title="Trajets par pays"
-            subtitle="Top 10 des pays les plus représentés."
+            subtitle="Top 10 des pays les plus représentés dans les données."
             data={sortedCountryStats.slice(0, 10)}
             dataKey="trip_count"
             nameKey="country"
             axisFormatter={(value) => formatInteger(value)}
             valueFormatter={(value) => `${formatInteger(value)} trajets`}
+            barColor="#2c5fdd"
           />
 
           <ChartCard
             title="Trajets par type de train"
-            subtitle="Répartition des trajets selon le matériel utilisé."
+            subtitle="Répartition des trajets selon le type de matériel roulant."
             data={sortedTrainTypeStats.slice(0, 8)}
             dataKey="trip_count"
             nameKey="train_type"
             axisFormatter={(value) => formatInteger(value)}
             valueFormatter={(value) => `${formatInteger(value)} trajets`}
+            barColor="#16324f"
           />
 
           <ChartCard
             title="Émissions moyennes par traction"
-            subtitle="Lecture de l’impact moyen au kilomètre selon la traction."
+            subtitle="Comparaison de l’impact moyen au kilomètre selon la traction."
             data={sortedTractionStats}
             dataKey="avg_emission_per_km"
             nameKey="traction"
             axisFormatter={(value) => formatDecimal(value, 3)}
             valueFormatter={(value) => `${formatDecimal(value, 3)} kg / km`}
+            barColor="#0f9d8a"
           />
         </div>
       </section>
 
       <section className="dashboard-section">
         <SearchTrips apiUrl={API_URL} />
-      </section>
-    </div>
-  )
-}
-
-function LoadingDashboard() {
-  return (
-    <div className="dashboard dashboard-loading">
-      <section className="hero-panel skeleton" aria-hidden="true" />
-
-      <section className="stats-grid" aria-hidden="true">
-        {Array.from({ length: 6 }).map((_, index) => (
-          <div key={index} className="stats-card skeleton" />
-        ))}
-      </section>
-
-      <section className="charts-grid" aria-hidden="true">
-        {Array.from({ length: 3 }).map((_, index) => (
-          <div key={index} className="chart-card skeleton" />
-        ))}
       </section>
     </div>
   )

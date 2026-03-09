@@ -15,7 +15,7 @@ function SearchTrips({ apiUrl }) {
   const [hasSearched, setHasSearched] = useState(false)
 
   const resultLabel = useMemo(() => {
-    if (!hasSearched) return 'Recherche ciblée'
+    if (!hasSearched) return 'Recherche prête'
     return `${trips.length} résultat${trips.length > 1 ? 's' : ''}`
   }, [hasSearched, trips.length])
 
@@ -36,7 +36,7 @@ function SearchTrips({ apiUrl }) {
       const message =
         err?.response?.data?.detail ||
         err?.response?.data?.message ||
-        err.message ||
+        err?.message ||
         'Erreur lors de la recherche.'
       setTrips([])
       setError(message)
@@ -58,15 +58,15 @@ function SearchTrips({ apiUrl }) {
     <section className="search-section">
       <div className="search-header">
         <div>
-          <span className="section-badge">Recherche</span>
+          <span className="section-pill">Recherche avancée</span>
           <h2>Explorer les trajets</h2>
           <p>
-            Filtre rapidement les liaisons par origine et destination pour retrouver
-            les trajets les plus pertinents.
+            Recherche rapide par origine et destination avec restitution claire des
+            résultats opérationnels.
           </p>
         </div>
 
-        <div className="result-badge">{resultLabel}</div>
+        <div className="search-status-badge">{resultLabel}</div>
       </div>
 
       <form onSubmit={handleSearch} className="search-form">
@@ -94,7 +94,7 @@ function SearchTrips({ apiUrl }) {
 
         <div className="search-actions">
           <button type="submit" className="primary-button" disabled={loading}>
-            {loading ? 'Recherche en cours...' : 'Rechercher'}
+            {loading ? 'Recherche...' : 'Rechercher'}
           </button>
 
           <button
@@ -108,15 +108,13 @@ function SearchTrips({ apiUrl }) {
         </div>
       </form>
 
-      {error ? (
-        <div className="inline-error">Impossible d’effectuer la recherche : {error}</div>
-      ) : null}
+      {error ? <div className="inline-error">Impossible d’effectuer la recherche : {error}</div> : null}
 
       {hasSearched && !loading && trips.length === 0 && !error ? (
         <div className="empty-state">
           <div>
             <h3>Aucun trajet trouvé</h3>
-            <p>Essaie d’élargir la recherche ou de modifier l’origine et la destination.</p>
+            <p>Modifie les critères de recherche pour élargir les résultats.</p>
           </div>
         </div>
       ) : null}
@@ -147,9 +145,7 @@ function SearchTrips({ apiUrl }) {
                     </td>
                     <td>
                       <span className="city">{trip.destination || '—'}</span>
-                      <span className="country">
-                        {trip.destination_country || 'Pays inconnu'}
-                      </span>
+                      <span className="country">{trip.destination_country || 'Pays inconnu'}</span>
                     </td>
                     <td>
                       <span className="route-name">{trip.route_name || '—'}</span>

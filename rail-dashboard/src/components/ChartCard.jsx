@@ -16,7 +16,7 @@ const defaultValueFormatter = (value) =>
 
 const truncateLabel = (value) => {
   const label = String(value ?? '')
-  return label.length > 14 ? `${label.slice(0, 14)}…` : label
+  return label.length > 16 ? `${label.slice(0, 16)}…` : label
 }
 
 function ChartCard({
@@ -26,7 +26,8 @@ function ChartCard({
   dataKey,
   nameKey,
   valueFormatter = defaultValueFormatter,
-  axisFormatter = defaultValueFormatter
+  axisFormatter = defaultValueFormatter,
+  barColor = '#2c5fdd'
 }) {
   const renderTooltip = ({ active, payload, label }) => {
     if (!active || !payload || !payload.length) return null
@@ -42,48 +43,49 @@ function ChartCard({
   return (
     <article className="chart-card">
       <div className="chart-card-header">
-        <div className="chart-card-title-group">
+        <div>
           <h3>{title}</h3>
           {subtitle ? <p>{subtitle}</p> : null}
         </div>
+        <span className="chart-card-badge">{data.length} catégories</span>
       </div>
 
       {data.length > 0 ? (
         <div className="chart-wrapper">
           <ResponsiveContainer width="100%" height={320}>
-            <BarChart data={data} margin={{ top: 10, right: 16, left: -8, bottom: 14 }}>
+            <BarChart data={data} margin={{ top: 12, right: 12, left: -8, bottom: 16 }}>
               <CartesianGrid
                 strokeDasharray="3 3"
                 vertical={false}
-                stroke="rgba(148, 163, 184, 0.22)"
+                stroke="rgba(16, 35, 61, 0.10)"
               />
               <XAxis
                 dataKey={nameKey}
                 tickFormatter={truncateLabel}
-                tick={{ fontSize: 12, fill: '#64748b' }}
+                tick={{ fontSize: 12, fill: '#6b7c93' }}
                 tickLine={false}
                 axisLine={false}
                 interval={0}
-                angle={-25}
+                angle={-22}
                 textAnchor="end"
-                height={64}
+                height={62}
               />
               <YAxis
                 tickFormatter={(value) => axisFormatter(value)}
-                tick={{ fontSize: 12, fill: '#64748b' }}
+                tick={{ fontSize: 12, fill: '#6b7c93' }}
                 tickLine={false}
                 axisLine={false}
                 width={72}
               />
               <Tooltip
                 content={renderTooltip}
-                cursor={{ fill: 'rgba(37, 99, 235, 0.08)' }}
+                cursor={{ fill: 'rgba(44, 95, 221, 0.08)' }}
               />
               <Bar
                 dataKey={dataKey}
+                fill={barColor}
                 radius={[10, 10, 0, 0]}
-                fill="#2563eb"
-                maxBarSize={42}
+                maxBarSize={40}
               />
             </BarChart>
           </ResponsiveContainer>
