@@ -3,31 +3,30 @@ FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-# Copier les fichiers de dépendances
-COPY package.json package-lock.json* ./
+# Copier les dépendances
+COPY package.json package-lock.json ./
 
 # Installer les dépendances
 RUN npm install
 
-# Copier le code source
+# Copier le code
 COPY . .
 
-# Build de production
+# Build
 RUN npm run build
+
 
 # Production stage
 FROM nginx:alpine
 
-# Copier les fichiers buildés
+# Copier le build
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Copier la configuration nginx personnalisée
+# Config nginx
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Exposer le port
 EXPOSE 80
 
-# Healthcheck
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget --quiet --tries=1 --spider http://localhost/ || exit 1
 
