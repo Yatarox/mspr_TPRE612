@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import axios from 'axios'
 import StatsCard from './StatsCard'
 import ChartCard from './ChartCard'
@@ -6,13 +6,28 @@ import SearchTrips from './SearchTrips'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
+const formatInteger = (value) =>
+  new Intl.NumberFormat('fr-FR').format(Number(value) || 0)
+
+const formatDecimal = (value, digits = 1) =>
+  new Intl.NumberFormat('fr-FR', {
+    maximumFractionDigits: digits
+  }).format(Number(value) || 0)
+
+const getErrorMessage = (error) => {
+  if (typeof error?.response?.data?.detail === 'string') return error.response.data.detail
+  if (typeof error?.response?.data?.message === 'string') return error.response.data.message
+  if (typeof error?.message === 'string') return error.message
+  return 'Une erreur inattendue est survenue.'
+}
+
 function Dashboard() {
   const [overview, setOverview] = useState(null)
   const [countryStats, setCountryStats] = useState([])
   const [trainTypeStats, setTrainTypeStats] = useState([])
   const [tractionStats, setTractionStats] = useState([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     fetchData()
@@ -21,6 +36,8 @@ function Dashboard() {
   const fetchData = async () => {
     try {
       setLoading(true)
+      setError('')
+
       const [overviewRes, countryRes, trainTypeRes, tractionRes] = await Promise.all([
         axios.get(`${API_URL}/api/stats/overview`),
         axios.get(`${API_URL}/api/stats/by-country`),
@@ -29,81 +46,254 @@ function Dashboard() {
       ])
 
       setOverview(overviewRes.data)
-      setCountryStats(countryRes.data)
-      setTrainTypeStats(trainTypeRes.data)
-      setTractionStats(tractionRes.data)
-      setError(null)
+      setCountryStats(Array.isArray(countryRes.data) ? countryRes.data : [])
+      setTrainTypeStats(Array.isArray(trainTypeRes.data) ? trainTypeRes.data : [])
+      setTractionStats(Array.isArray(tractionRes.data) ? tractionRes.data : [])
     } catch (err) {
-      setError('Erreur de connexion à l\'API: ' + err.message)
+      setError(`Erreur de connexion à l’API : ${getErrorMessage(err)}`)
       console.error(err)
     } finally {
       setLoading(false)
     }
   }
 
-  if (loading) return <div className="loading">⏳ Chargement des données...</div>
-  if (error) return <div className="error">{error}</div>
+  const sortedCountryStats = useMemo(
+    () => [...countryStats].sort((a, b) => (b?.trip_count ?? 0) - (a?.trip_count ?? 0)),
+    [countryStats]
+  )
+
+  const sortedTrainTypeStats = useMemo(
+    () => [...trainTypeStats].sort((a, b) => (b?.trip_count ?? 0) - (a?.trip_count ?? 0)),
+    [trainTypeStats]
+  )
+
+  const sortedTractionStats = useMemo(
+    () =>
+      [...tractionStats].sort(
+        (a, b) => (b?.avg_emission_per_km ?? 0) - (a?.avg_emission_per_km ?? 0)
+      ),
+    [tractionStats]
+  )
+
+  const cards = useMemo(
+    () => [
+      {
+        title: 'Total trajets',
+        value: formatInteger(overview?.total_trips),
+        icon: '🚆',
+        helperText: 'Volume global des trajets disponibles dans la base.',
+        accent: 'blue',
+        featured: true
+      },
+      {
+        title: 'Distance totale',
+        value: `${formatInteger(overview?.total_distance_km)} km`,
+        icon: '📏',
+        helperText: 'Distance cumulée de l’ensemble des trajets analysés.',
+        accent: 'navy',
+        featured: true
+      },
+      {
+        title: 'Routes',
+        value: formatInteger(overview?.total_routes),
+        icon: '🛤️',
+        helperText: 'Nombre d’itinéraires distincts.',
+        accent: 'slate'
+      },
+      {
+        title: 'Émissions CO2',
+        value: `${formatInteger(overview?.total_emissions_kg)} kg`,
+        icon: '🌍',
+        helperText: 'Total des émissions consolidées.',
+        accent: 'teal'
+      },
+      {
+        title: 'Distance moyenne',
+        value: `${formatDecimal(overview?.avg_distance_km, 1)} km`,
+        icon: '📊',
+        helperText: 'Distance moyenne observée par trajet.',
+        accent: 'gold'
+      },
+      {
+        title: 'Durée moyenne',
+        value: `${formatDecimal(overview?.avg_duration_h, 2)} h`,
+        icon: '⏱️',
+        helperText: 'Temps moyen constaté sur les trajets.',
+        accent: 'slate'
+      }
+    ],
+    [overview]
+  )
+
+  const spotlight = useMemo(
+    () => [
+      {
+        label: 'Pays dominant',
+        value: sortedCountryStats[0]?.country || '—',
+        meta: sortedCountryStats[0]
+          ? `${formatInteger(sortedCountryStats[0]?.trip_count)} trajets`
+          : 'Aucune donnée'
+      },
+      {
+        label: 'Train dominant',
+        value: sortedTrainTypeStats[0]?.train_type || '—',
+        meta: sortedTrainTypeStats[0]
+          ? `${formatInteger(sortedTrainTypeStats[0]?.trip_count)} trajets`
+          : 'Aucune donnée'
+      },
+      {
+        label: 'Traction la plus émissive',
+        value: sortedTractionStats[0]?.traction || '—',
+        meta: sortedTractionStats[0]
+          ? `${formatDecimal(sortedTractionStats[0]?.avg_emission_per_km, 3)} kg / km`
+          : 'Aucune donnée'
+      }
+    ],
+    [sortedCountryStats, sortedTrainTypeStats, sortedTractionStats]
+  )
+
+  if (loading) {
+    return (
+      <div className="dashboard dashboard-loading">
+        <section className="premium-hero premium-skeleton" />
+        <section className="stats-grid">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <div key={index} className="stats-card premium-skeleton" />
+          ))}
+        </section>
+        <section className="charts-grid">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div key={index} className="chart-card premium-skeleton" />
+          ))}
+        </section>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="state-card error-state">
+        <span className="section-pill">Connexion API</span>
+        <h2>Impossible de charger le dashboard</h2>
+        <p>{error}</p>
+        <button type="button" className="primary-button" onClick={fetchData}>
+          Réessayer
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="dashboard">
-      {/* KPIs */}
-      <div className="stats-grid">
-        <StatsCard 
-          title="Total Trajets" 
-          value={overview?.total_trips?.toLocaleString() || '0'} 
-          icon="🚆"
-        />
-        <StatsCard 
-          title="Routes" 
-          value={overview?.total_routes?.toLocaleString() || '0'} 
-          icon="🛤️"
-        />
-        <StatsCard 
-          title="Distance Totale" 
-          value={`${overview?.total_distance_km?.toLocaleString() || '0'} km`} 
-          icon="📏"
-        />
-        <StatsCard 
-          title="Émissions CO2" 
-          value={`${overview?.total_emissions_kg?.toLocaleString() || '0'} kg`} 
-          icon="🌍"
-        />
-        <StatsCard 
-          title="Distance Moyenne" 
-          value={`${overview?.avg_distance_km?.toFixed(1) || '0'} km`} 
-          icon="📊"
-        />
-        <StatsCard 
-          title="Durée Moyenne" 
-          value={`${overview?.avg_duration_h?.toFixed(2) || '0'} h`} 
-          icon="⏱️"
-        />
-      </div>
+      <section className="premium-hero">
+        <div className="premium-hero-main">
+          <span className="section-pill">Vue exécutive</span>
+          <h2>Une lecture premium, claire et prête pour la présentation</h2>
+          <p>
+            Ce dashboard centralise les indicateurs essentiels, les répartitions
+            principales et la recherche de trajets dans une interface plus élégante,
+            plus structurée et plus professionnelle.
+          </p>
 
-      {/* Charts */}
-      <div className="charts-grid">
-        <ChartCard 
-          title="📍 Trajets par Pays" 
-          data={countryStats.slice(0, 10)} 
-          dataKey="trip_count"
-          nameKey="country"
-        />
-        <ChartCard 
-          title="🚄 Trajets par Type de Train" 
-          data={trainTypeStats.slice(0, 8)} 
-          dataKey="trip_count"
-          nameKey="train_type"
-        />
-        <ChartCard 
-          title="⚡ Émissions par Traction" 
-          data={tractionStats} 
-          dataKey="avg_emission_per_km"
-          nameKey="traction"
-        />
-      </div>
+          <div className="premium-highlight-band">
+            <div className="highlight-item">
+              <span>Trajets analysés</span>
+              <strong>{formatInteger(overview?.total_trips)}</strong>
+            </div>
+            <div className="highlight-item">
+              <span>Routes distinctes</span>
+              <strong>{formatInteger(overview?.total_routes)}</strong>
+            </div>
+            <div className="highlight-item">
+              <span>CO2 total</span>
+              <strong>{formatInteger(overview?.total_emissions_kg)} kg</strong>
+            </div>
+          </div>
+        </div>
 
-      {/* Search */}
-      <SearchTrips apiUrl={API_URL} />
+        <div className="premium-hero-side">
+          {spotlight.map((item) => (
+            <div className="premium-side-card" key={item.label}>
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+              <small>{item.meta}</small>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="dashboard-section">
+        <div className="section-heading">
+          <div>
+            <span className="section-pill">KPIs</span>
+            <h2>Indicateurs clés</h2>
+            <p>Des cartes plus élégantes, mieux hiérarchisées et plus faciles à lire.</p>
+          </div>
+        </div>
+
+        <div className="stats-grid premium-stats-grid">
+          {cards.map((card) => (
+            <StatsCard
+              key={card.title}
+              title={card.title}
+              value={card.value}
+              icon={card.icon}
+              helperText={card.helperText}
+              accent={card.accent}
+              featured={card.featured}
+            />
+          ))}
+        </div>
+      </section>
+
+      <section className="dashboard-section">
+        <div className="section-heading">
+          <div>
+            <span className="section-pill">Analyse visuelle</span>
+            <h2>Répartitions principales</h2>
+            <p>Une visualisation plus sobre et plus premium des grandes tendances.</p>
+          </div>
+        </div>
+
+        <div className="charts-grid">
+          <ChartCard
+            title="Trajets par pays"
+            subtitle="Top 10 des pays les plus représentés dans les données."
+            data={sortedCountryStats.slice(0, 10)}
+            dataKey="trip_count"
+            nameKey="country"
+            axisFormatter={(value) => formatInteger(value)}
+            valueFormatter={(value) => `${formatInteger(value)} trajets`}
+            barColor="#2c5fdd"
+          />
+
+          <ChartCard
+            title="Trajets par type de train"
+            subtitle="Répartition des trajets selon le type de matériel roulant."
+            data={sortedTrainTypeStats.slice(0, 8)}
+            dataKey="trip_count"
+            nameKey="train_type"
+            axisFormatter={(value) => formatInteger(value)}
+            valueFormatter={(value) => `${formatInteger(value)} trajets`}
+            barColor="#16324f"
+          />
+
+          <ChartCard
+            title="Émissions moyennes par traction"
+            subtitle="Comparaison de l’impact moyen au kilomètre selon la traction."
+            data={sortedTractionStats}
+            dataKey="avg_emission_per_km"
+            nameKey="traction"
+            axisFormatter={(value) => formatDecimal(value, 3)}
+            valueFormatter={(value) => `${formatDecimal(value, 3)} kg / km`}
+            barColor="#0f9d8a"
+          />
+        </div>
+      </section>
+
+      <section className="dashboard-section">
+        <SearchTrips apiUrl={API_URL} />
+      </section>
     </div>
   )
 }
