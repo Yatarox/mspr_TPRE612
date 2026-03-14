@@ -6,7 +6,7 @@ extract:
 
 transform:
   chunk_size: 5000
-  max_workers: 4
+  max_workers: 2
   skip_distance_threshold: 1000000
   memory_limit_mb: 4096
 

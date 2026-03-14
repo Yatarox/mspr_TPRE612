@@ -7,9 +7,6 @@ from airflow.providers.mysql.hooks.mysql import MySqlHook
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ============================================================
-# Helpers
-# ============================================================
 
 
 def get_column_max_length(

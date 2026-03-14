@@ -1,9 +1,9 @@
 from typing import Optional
 import pandas as pd
+import logging
 
-# ============================================================
-# Time & classification
-# ============================================================
+logger = logging.getLogger(__name__)
+
 
 def parse_gtfs_time_to_sec(t: str) -> Optional[int]:
     if not isinstance(t, str) or not t.strip():
@@ -17,6 +17,7 @@ def parse_gtfs_time_to_sec(t: str) -> Optional[int]:
     except Exception:
         return None
 
+
 def classifier_train(departure_time: str) -> str:
     try:
         h = int(departure_time.split(":")[0])
@@ -25,14 +26,18 @@ def classifier_train(departure_time: str) -> str:
         return "INCONNU"
 
 
-# ============================================================
-# Core computations
-# ============================================================
-
 def compute_durations(stop_times: pd.DataFrame) -> pd.Series:
     if stop_times.empty:
         return pd.Series(dtype=float)
-    st = stop_times[["trip_id", "arrival_time", "departure_time", "stop_sequence"]].copy()
+
+    required = ["trip_id", "arrival_time", "departure_time", "stop_sequence"]
+    missing = [col for col in required if col not in stop_times.columns]
+    if missing:
+        logger.warning(f"⚠️ compute_durations: colonnes manquantes {missing}")
+        logger.warning(f"   Colonnes disponibles: {list(stop_times.columns)}")
+        return pd.Series(dtype=float)
+
+    st = stop_times[required].copy()
     st["arr_sec"] = st["arrival_time"].apply(parse_gtfs_time_to_sec)
     st["dep_sec"] = st["departure_time"].apply(parse_gtfs_time_to_sec)
     st = st.sort_values(["trip_id", "stop_sequence"])
@@ -47,6 +52,6 @@ def compute_durations(stop_times: pd.DataFrame) -> pd.Series:
             return 0.0
         return float(vals.max() - vals.min())
 
-    alt = g.apply(minmax_span)
+    alt = g.apply(minmax_span, include_groups=False)
     dur_sec = dur_sec.where(dur_sec >= 0, alt).fillna(0)
     return (dur_sec / 60.0).round(2)

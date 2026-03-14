@@ -23,7 +23,6 @@ logger = logging.getLogger(__name__)
 
 
 class StructuredLogger:
-    """Structured logger for easier monitoring."""
 
     def __init__(self, base_logger: logging.Logger):
         self.logger = base_logger
@@ -107,7 +106,6 @@ default_args = {
 def gtfs_full_etl():
     default_urls = [
         "https://transport.data.gouv.fr/api/datasets/563dd039b5950814b0588710",
-        "https://transport.data.gouv.fr/api/datasets/5f9008f1af9cf0bed8270cde",
         "https://transport.data.gouv.fr/api/datasets/685baf2be31192d0ec7bcdc9",
         "https://transport.data.gouv.fr/api/datasets/63c02bbf4059d43863de0c81",
         "https://transport.data.gouv.fr/api/datasets/64635525318cc75a9a8a771f",
@@ -119,7 +117,15 @@ def gtfs_full_etl():
 
     default_zip_urls = [
         "https://www.data.gouv.fr/api/1/datasets/r/b2dfbaa3-47e9-4749-b6a4-750bebd760e7",
-        "https://www.data.gouv.fr/api/1/datasets/r/eae0fa46-087a-4018-ada9-d8add124e635"
+        "https://www.data.gouv.fr/api/1/datasets/r/eae0fa46-087a-4018-ada9-d8add124e635",
+        "https://www.data.gouv.fr/api/1/datasets/r/9ae758ec-cd7a-40cd-a890-bb3963224942",
+        "https://gtfs.irail.be/nmbs/gtfs/latest.zip",
+        "https://data.opentransportdata.swiss/en/dataset/timetable-2025-gtfs2020/permalink",
+        "https://www.nvbw.de/fileadmin/user_upload/service/open_data/fahrplandaten_mit_liniennetz/ding.zip",
+        " https://dati.toscana.it/dataset/8bb8f8fe-fe7d-41d0-90dc-49f2456180d1/resource/ae4594d4-d395-4651-a097-446e878e9005/download/90-lineeregionali.gtfs",
+        "https://www.data.gouv.fr/api/1/datasets/r/bfd97acd-63f3-4ea4-bfe8-70e4c7fd8d13",
+        "https://api.transtejo.pt/files/GTFS.zip",
+        "https://www.data.gouv.fr/api/1/datasets/r/c0bd9ff1-97f9-43f8-aca4-8e80d7728324"
     ]
 
     _set_variable_if_missing("gtfs_base_urls", json.dumps(default_urls, ensure_ascii=False))

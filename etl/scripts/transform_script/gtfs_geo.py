@@ -6,9 +6,6 @@ import numpy as np
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ============================================================
-# Country detection from GPS coordinates
-# ============================================================
 
 def build_stop_country_map(stops_df: pd.DataFrame) -> Dict[str, Optional[str]]:
     if stops_df.empty or "stop_lat" not in stops_df.columns or "stop_lon" not in stops_df.columns:

@@ -11,10 +11,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-# ============================================================
-# Staging
-# ============================================================
-
 
 def load_staging_table(
     hook: MySqlHook,

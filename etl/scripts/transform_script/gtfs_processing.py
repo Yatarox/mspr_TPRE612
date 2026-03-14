@@ -10,9 +10,6 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ============================================================
-# Processing
-# ============================================================
 
 def _route_title(route_row: Dict, origin_stop_name: str, destination_stop_name: str) -> str:
     short = str(route_row.get("route_short_name") or "").strip()

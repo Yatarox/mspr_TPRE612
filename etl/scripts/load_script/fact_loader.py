@@ -103,10 +103,8 @@ def upsert_dimensions_from_staging(hook: MySqlHook, load_id: int) -> None:
 
 
 def load_fact_table(hook, load_id: int) -> int:
-    # Upsert dimensions en bloc
     upsert_dimensions_from_staging(hook, load_id)
 
-    # Insert/Update des faits en un seul SQL
     hook.run("""
         INSERT INTO fact_trip_summary
         (trip_sk, dataset_sk, route_sk, agency_sk, service_sk, train_type_sk, traction_sk,

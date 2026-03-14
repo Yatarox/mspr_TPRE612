@@ -26,13 +26,20 @@ services:
     container_name: rail-airflow
     ports:
       - "8080:8080"
+    mem_limit: 10g
+    shm_size: "2g"
     environment:
       - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=False
       - AIRFLOW_CONN_MYSQL_DEFAULT=mysql://root:root@mysql:3306/rail_dw
+
+      # ← Fix Airflow 3 SimpleAuthManager
+      - AIRFLOW__SIMPLE_AUTH_MANAGER__USERS=admin:admin
+      - AIRFLOW__SIMPLE_AUTH_MANAGER__PASSWORDS=admin:admin123
+
     deploy:
       resources:
         limits:
-          memory: 8G
+          memory: 10G
         reservations:
           memory: 2G
     depends_on:

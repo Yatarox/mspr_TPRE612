@@ -7,9 +7,6 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ============================================================
-# Dimensions (row-wise fallback, conservées pour compat)
-# ============================================================
 
 
 def load_dim_dataset(hook, dataset_id: int) -> int:
