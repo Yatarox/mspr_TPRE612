@@ -9,6 +9,8 @@
 Ce projet vise à concevoir une chaîne de traitement de données **de bout en bout** pour des données de transport au format **GTFS** :  
 **collecte (Extract) → transformation (Transform) → chargement (Load) → exposition API → visualisation dashboard**.
 
+liens vers le repo: https://github.com/Yatarox/mspr_TPRE612
+
 Objectif métier : fournir à l’observatoire **ObRail Europe** une base analytique fiable pour suivre :
 - les trajets,
 - les distances,
