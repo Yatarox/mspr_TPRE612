@@ -6,6 +6,46 @@ const formatNumber = (value, digits = 1) =>
     maximumFractionDigits: digits
   }).format(Number(value) || 0)
 
+const getValue = (object, keys, fallback = '—') => {
+  for (const key of keys) {
+    const value = object?.[key]
+    if (value !== undefined && value !== null && value !== '') {
+      return value
+    }
+  }
+  return fallback
+}
+
+const normalizeDayNightLabel = (trip) => {
+  const raw = getValue(
+    trip,
+    ['day_night_type', 'service_period', 'trip_period', 'journey_period', 'time_of_day'],
+    ''
+  )
+
+  if (!raw) return 'Non renseigné'
+
+  const normalized = String(raw).toLowerCase()
+
+  if (
+    normalized.includes('night') ||
+    normalized.includes('nuit') ||
+    normalized === 'n'
+  ) {
+    return 'Train de nuit'
+  }
+
+  if (
+    normalized.includes('day') ||
+    normalized.includes('jour') ||
+    normalized === 'd'
+  ) {
+    return 'Train de jour'
+  }
+
+  return raw
+}
+
 function SearchTrips({ apiUrl }) {
   const [origin, setOrigin] = useState('')
   const [destination, setDestination] = useState('')
@@ -61,8 +101,8 @@ function SearchTrips({ apiUrl }) {
           <span className="section-pill">Recherche avancée</span>
           <h2>Explorer les trajets</h2>
           <p>
-            Recherche rapide par origine et destination avec restitution claire des
-            résultats opérationnels.
+            Recherche par origine et destination avec restitution enrichie des
+            données disponibles sur chaque trajet.
           </p>
         </div>
 
@@ -122,7 +162,7 @@ function SearchTrips({ apiUrl }) {
       {trips.length > 0 ? (
         <div className="search-results">
           <div className="table-wrapper">
-            <table className="trips-table">
+            <table className="trips-table trips-table-extended">
               <thead>
                 <tr>
                   <th>Origine</th>
@@ -131,35 +171,72 @@ function SearchTrips({ apiUrl }) {
                   <th>Distance</th>
                   <th>Durée</th>
                   <th>Type de train</th>
+                  <th>Traction</th>
+                  <th>Fréquence</th>
+                  <th>Service</th>
+                  <th>Horaires</th>
+                  <th>Opérateur</th>
                   <th>CO2</th>
                 </tr>
               </thead>
               <tbody>
-                {trips.map((trip, idx) => (
-                  <tr
-                    key={`${trip.route_name || 'route'}-${trip.origin || 'origin'}-${trip.destination || 'destination'}-${idx}`}
-                  >
-                    <td>
-                      <span className="city">{trip.origin || '—'}</span>
-                      <span className="country">{trip.origin_country || 'Pays inconnu'}</span>
-                    </td>
-                    <td>
-                      <span className="city">{trip.destination || '—'}</span>
-                      <span className="country">{trip.destination_country || 'Pays inconnu'}</span>
-                    </td>
-                    <td>
-                      <span className="route-name">{trip.route_name || '—'}</span>
-                    </td>
-                    <td className="number-cell">{formatNumber(trip.distance_km, 1)} km</td>
-                    <td className="number-cell">{formatNumber(trip.duration_h, 2)} h</td>
-                    <td>
-                      <span className="data-pill">{trip.train_type || 'Non renseigné'}</span>
-                    </td>
-                    <td className="number-cell">
-                      {formatNumber(trip.total_emission_kgco2e, 2)} kg
-                    </td>
-                  </tr>
-                ))}
+                {trips.map((trip, idx) => {
+                  const routeName = getValue(trip, ['route_name', 'route_long_name', 'route_short_name'])
+                  const trainType = getValue(trip, ['train_type', 'vehicle_type', 'service_name', 'rolling_stock'], 'Non renseigné')
+                  const traction = getValue(trip, ['traction', 'traction_type', 'power_type'], 'Non renseignée')
+                  const frequency = getValue(trip, ['frequency', 'service_frequency', 'headway_label', 'trip_frequency'], 'Non renseignée')
+                  const operator = getValue(trip, ['operator', 'agency_name', 'company', 'carrier'], 'Non renseigné')
+                  const departureTime = getValue(trip, ['departure_time', 'depart_time', 'planned_departure_time'], '')
+                  const arrivalTime = getValue(trip, ['arrival_time', 'planned_arrival_time'], '')
+                  const serviceLabel = normalizeDayNightLabel(trip)
+
+                  return (
+                    <tr
+                      key={`${routeName}-${trip.origin || 'origin'}-${trip.destination || 'destination'}-${idx}`}
+                    >
+                      <td>
+                        <span className="city">{trip.origin || '—'}</span>
+                        <span className="country">{trip.origin_country || 'Pays inconnu'}</span>
+                      </td>
+
+                      <td>
+                        <span className="city">{trip.destination || '—'}</span>
+                        <span className="country">{trip.destination_country || 'Pays inconnu'}</span>
+                      </td>
+
+                      <td>
+                        <span className="route-name">{routeName}</span>
+                      </td>
+
+                      <td className="number-cell">{formatNumber(trip.distance_km, 1)} km</td>
+                      <td className="number-cell">{formatNumber(trip.duration_h, 2)} h</td>
+
+                      <td>
+                        <span className="data-pill">{trainType}</span>
+                      </td>
+
+                      <td>{traction}</td>
+                      <td>{frequency}</td>
+
+                      <td>
+                        <span className="neutral-pill">{serviceLabel}</span>
+                      </td>
+
+                      <td>
+                        <div className="schedule-cell">
+                          <span>{departureTime || '—'}</span>
+                          <span>{arrivalTime || '—'}</span>
+                        </div>
+                      </td>
+
+                      <td>{operator}</td>
+
+                      <td className="number-cell">
+                        {formatNumber(trip.total_emission_kgco2e, 2)} kg
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

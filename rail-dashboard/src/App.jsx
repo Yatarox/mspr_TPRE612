@@ -12,9 +12,8 @@ function App() {
             <span className="eyebrow">Rail Intelligence Platform</span>
             <h1>Rail Data Warehouse</h1>
             <p>
-              Tableau de bord analytique moderne pour piloter les trajets ferroviaires,
-              les distances, les durées et les émissions avec une lecture claire,
-              élégante et professionnelle.
+              Visualisez les trajets, les distances, les durées et les émissions
+              ferroviaires dans un tableau de bord clair et structuré.
             </p>
           </div>
 
