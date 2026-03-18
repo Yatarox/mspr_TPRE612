@@ -21,11 +21,22 @@ const getErrorMessage = (error) => {
   return 'Une erreur inattendue est survenue.'
 }
 
+const normalizeServiceType = (value) => {
+  const normalized = String(value ?? '').trim().toLowerCase()
+
+  if (!normalized) return 'Non renseigné'
+  if (normalized.includes('nuit') || normalized.includes('night')) return 'Nuit'
+  if (normalized.includes('jour') || normalized.includes('day')) return 'Jour'
+
+  return String(value)
+}
+
 function Dashboard() {
   const [overview, setOverview] = useState(null)
   const [countryStats, setCountryStats] = useState([])
   const [trainTypeStats, setTrainTypeStats] = useState([])
   const [tractionStats, setTractionStats] = useState([])
+  const [tripSamples, setTripSamples] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -38,17 +49,19 @@ function Dashboard() {
       setLoading(true)
       setError('')
 
-      const [overviewRes, countryRes, trainTypeRes, tractionRes] = await Promise.all([
+      const [overviewRes, countryRes, trainTypeRes, tractionRes, tripsRes] = await Promise.all([
         axios.get(`${API_URL}/api/stats/overview`),
         axios.get(`${API_URL}/api/stats/by-country`),
         axios.get(`${API_URL}/api/stats/by-train-type`),
-        axios.get(`${API_URL}/api/stats/by-traction`)
+        axios.get(`${API_URL}/api/stats/by-traction`),
+        axios.get(`${API_URL}/api/trips/search`, { params: { limit: 500 } })
       ])
 
       setOverview(overviewRes.data)
       setCountryStats(Array.isArray(countryRes.data) ? countryRes.data : [])
       setTrainTypeStats(Array.isArray(trainTypeRes.data) ? trainTypeRes.data : [])
       setTractionStats(Array.isArray(tractionRes.data) ? tractionRes.data : [])
+      setTripSamples(Array.isArray(tripsRes.data) ? tripsRes.data : [])
     } catch (err) {
       setError(`Erreur de connexion à l’API : ${getErrorMessage(err)}`)
       console.error(err)
@@ -75,13 +88,33 @@ function Dashboard() {
     [tractionStats]
   )
 
+  const serviceTypeStats = useMemo(() => {
+    const counts = {}
+
+    tripSamples.forEach((trip) => {
+      const rawValue =
+        trip?.service_type ??
+        trip?.day_night_type ??
+        trip?.service_period ??
+        trip?.trip_period ??
+        trip?.time_of_day
+
+      const label = normalizeServiceType(rawValue)
+      counts[label] = (counts[label] || 0) + 1
+    })
+
+    return Object.entries(counts)
+      .map(([service_type, trip_count]) => ({ service_type, trip_count }))
+      .sort((a, b) => (b.trip_count ?? 0) - (a.trip_count ?? 0))
+  }, [tripSamples])
+
   const cards = useMemo(
     () => [
       {
         title: 'Total trajets',
         value: formatInteger(overview?.total_trips),
         icon: '🚆',
-        helperText: 'Volume global des trajets disponibles dans la base.',
+        helperText: 'Nombre total de trajets disponibles.',
         accent: 'blue',
         featured: true
       },
@@ -89,7 +122,7 @@ function Dashboard() {
         title: 'Distance totale',
         value: `${formatInteger(overview?.total_distance_km)} km`,
         icon: '📏',
-        helperText: 'Distance cumulée de l’ensemble des trajets analysés.',
+        helperText: 'Distance cumulée sur l’ensemble des trajets.',
         accent: 'navy',
         featured: true
       },
@@ -104,21 +137,21 @@ function Dashboard() {
         title: 'Émissions CO2',
         value: `${formatInteger(overview?.total_emissions_kg)} kg`,
         icon: '🌍',
-        helperText: 'Total des émissions consolidées.',
+        helperText: 'Émissions consolidées de la base.',
         accent: 'teal'
       },
       {
         title: 'Distance moyenne',
         value: `${formatDecimal(overview?.avg_distance_km, 1)} km`,
         icon: '📊',
-        helperText: 'Distance moyenne observée par trajet.',
+        helperText: 'Distance moyenne par trajet.',
         accent: 'gold'
       },
       {
         title: 'Durée moyenne',
         value: `${formatDecimal(overview?.avg_duration_h, 2)} h`,
         icon: '⏱️',
-        helperText: 'Temps moyen constaté sur les trajets.',
+        helperText: 'Temps moyen observé.',
         accent: 'slate'
       }
     ],
@@ -162,7 +195,7 @@ function Dashboard() {
           ))}
         </section>
         <section className="charts-grid">
-          {Array.from({ length: 3 }).map((_, index) => (
+          {Array.from({ length: 4 }).map((_, index) => (
             <div key={index} className="chart-card premium-skeleton" />
           ))}
         </section>
@@ -187,12 +220,11 @@ function Dashboard() {
     <div className="dashboard">
       <section className="premium-hero">
         <div className="premium-hero-main">
-          <span className="section-pill">Vue exécutive</span>
-          <h2>Une lecture premium, claire et prête pour la présentation</h2>
+          <span className="section-pill">Vue d’ensemble</span>
+          <h2>Piloter les trajets ferroviaires en un coup d’œil</h2>
           <p>
-            Ce dashboard centralise les indicateurs essentiels, les répartitions
-            principales et la recherche de trajets dans une interface plus élégante,
-            plus structurée et plus professionnelle.
+            Suivez les volumes, les distances, les durées et les émissions dans une
+            interface claire, structurée et orientée décision.
           </p>
 
           <div className="premium-highlight-band">
@@ -227,7 +259,7 @@ function Dashboard() {
           <div>
             <span className="section-pill">KPIs</span>
             <h2>Indicateurs clés</h2>
-            <p>Des cartes plus élégantes, mieux hiérarchisées et plus faciles à lire.</p>
+            <p>Les métriques essentielles pour suivre l’activité ferroviaire.</p>
           </div>
         </div>
 
@@ -251,14 +283,14 @@ function Dashboard() {
           <div>
             <span className="section-pill">Analyse visuelle</span>
             <h2>Répartitions principales</h2>
-            <p>Une visualisation plus sobre et plus premium des grandes tendances.</p>
+            <p>Vue synthétique des pays, matériels roulants, tractions et services.</p>
           </div>
         </div>
 
         <div className="charts-grid">
           <ChartCard
             title="Trajets par pays"
-            subtitle="Top 10 des pays les plus représentés dans les données."
+            subtitle="Top des pays les plus représentés."
             data={sortedCountryStats.slice(0, 10)}
             dataKey="trip_count"
             nameKey="country"
@@ -269,7 +301,7 @@ function Dashboard() {
 
           <ChartCard
             title="Trajets par type de train"
-            subtitle="Répartition des trajets selon le type de matériel roulant."
+            subtitle="Répartition par matériel roulant."
             data={sortedTrainTypeStats.slice(0, 8)}
             dataKey="trip_count"
             nameKey="train_type"
@@ -279,14 +311,28 @@ function Dashboard() {
           />
 
           <ChartCard
+            title="Répartition jour / nuit"
+            subtitle="Comparaison des trajets selon le service de jour ou de nuit."
+            data={serviceTypeStats}
+            dataKey="trip_count"
+            nameKey="service_type"
+            axisFormatter={(value) => formatInteger(value)}
+            valueFormatter={(value) => `${formatInteger(value)} trajets`}
+            barColor="#c29a54"
+            badgeLabel={`${serviceTypeStats.length} type${serviceTypeStats.length > 1 ? 's' : ''}`}
+          />
+
+          <ChartCard
             title="Émissions moyennes par traction"
-            subtitle="Comparaison de l’impact moyen au kilomètre selon la traction."
+            subtitle="Comparaison des émissions moyennes au km."
             data={sortedTractionStats}
             dataKey="avg_emission_per_km"
             nameKey="traction"
             axisFormatter={(value) => formatDecimal(value, 3)}
             valueFormatter={(value) => `${formatDecimal(value, 3)} kg / km`}
             barColor="#0f9d8a"
+            layout="horizontal"
+            badgeLabel={`${sortedTractionStats.length} traction${sortedTractionStats.length > 1 ? 's' : ''}`}
           />
         </div>
       </section>

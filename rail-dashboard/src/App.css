@@ -866,3 +866,39 @@ button {
     flex-direction: column;
   }
 }
+
+.chart-card-horizontal .chart-wrapper {
+  min-height: 360px;
+}
+
+.trips-table-extended {
+  min-width: 1480px;
+}
+
+.neutral-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(22, 50, 79, 0.08);
+  color: var(--navy);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.schedule-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 88px;
+}
+
+.schedule-cell span:first-child {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.schedule-cell span:last-child {
+  color: var(--text-soft);
+  font-size: 0.9rem;
+}
