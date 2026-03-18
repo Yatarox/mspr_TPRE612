@@ -39,3 +39,14 @@ async def test_get_health_unhealthy(mock_execute_query):
     assert result["status"] == "unhealthy"
     assert result["database"] == "error"
     assert "error" in result
+
+@pytest.mark.asyncio
+@patch("services.dashboard_service.execute_query")
+async def test_get_stats_by_service_type(mock_execute_query):
+    mock_execute_query.return_value = [
+        {"service_type": "Jour", "trip_count": 150},
+        {"service_type": "Nuit", "trip_count": 80}
+    ]
+    result = await dashboard_service.get_stats_by_service_type()
+    assert len(result) == 2
+    assert result[0]["service_type"] == "Jour"
