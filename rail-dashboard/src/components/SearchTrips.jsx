@@ -19,7 +19,7 @@ const getValue = (object, keys, fallback = '—') => {
 const normalizeDayNightLabel = (trip) => {
   const raw = getValue(
     trip,
-    ['day_night_type', 'service_period', 'trip_period', 'journey_period', 'time_of_day'],
+    ['service_type', 'day_night_type', 'service_period', 'trip_period', 'journey_period', 'time_of_day'],
     ''
   )
 
