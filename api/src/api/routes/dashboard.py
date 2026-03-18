@@ -52,9 +52,17 @@ async def search_trips(
     train_type: Optional[str] = Query(None, description="Type de train"),
     min_distance: Optional[float] = Query(None, ge=0),
     max_distance: Optional[float] = Query(None, ge=0),
-    limit: int = Query(default=50, ge=1, le=500)
+    limit: int = Query(default=50, ge=1, le=1000),
 ):
-    """Recherche de trajets avec filtres"""
     return await dashboard_service.search_trips(
-        origin, destination, train_type, min_distance, max_distance, limit
+        origin=origin,
+        destination=destination,
+        train_type=train_type,
+        min_distance=min_distance,
+        max_distance=max_distance,
+        limit=limit,
     )
+
+@router.get("/stats/by-service-type")
+async def get_stats_by_service_type():
+    return await dashboard_service.get_stats_by_service_type()

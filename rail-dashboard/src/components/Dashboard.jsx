@@ -21,22 +21,12 @@ const getErrorMessage = (error) => {
   return 'Une erreur inattendue est survenue.'
 }
 
-const normalizeServiceType = (value) => {
-  const normalized = String(value ?? '').trim().toLowerCase()
-
-  if (!normalized) return 'Non renseigné'
-  if (normalized.includes('nuit') || normalized.includes('night')) return 'Nuit'
-  if (normalized.includes('jour') || normalized.includes('day')) return 'Jour'
-
-  return String(value)
-}
-
 function Dashboard() {
   const [overview, setOverview] = useState(null)
   const [countryStats, setCountryStats] = useState([])
   const [trainTypeStats, setTrainTypeStats] = useState([])
   const [tractionStats, setTractionStats] = useState([])
-  const [tripSamples, setTripSamples] = useState([])
+  const [serviceTypeStats, setServiceTypeStats] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -49,19 +39,19 @@ function Dashboard() {
       setLoading(true)
       setError('')
 
-      const [overviewRes, countryRes, trainTypeRes, tractionRes, tripsRes] = await Promise.all([
+      const [overviewRes, countryRes, trainTypeRes, tractionRes, serviceTypeRes] = await Promise.all([
         axios.get(`${API_URL}/api/stats/overview`),
         axios.get(`${API_URL}/api/stats/by-country`),
         axios.get(`${API_URL}/api/stats/by-train-type`),
         axios.get(`${API_URL}/api/stats/by-traction`),
-        axios.get(`${API_URL}/api/trips/search`, { params: { limit: 500 } })
+        axios.get(`${API_URL}/api/stats/by-service-type`)
       ])
 
       setOverview(overviewRes.data)
       setCountryStats(Array.isArray(countryRes.data) ? countryRes.data : [])
       setTrainTypeStats(Array.isArray(trainTypeRes.data) ? trainTypeRes.data : [])
       setTractionStats(Array.isArray(tractionRes.data) ? tractionRes.data : [])
-      setTripSamples(Array.isArray(tripsRes.data) ? tripsRes.data : [])
+      setServiceTypeStats(Array.isArray(serviceTypeRes.data) ? serviceTypeRes.data : [])
     } catch (err) {
       setError(`Erreur de connexion à l’API : ${getErrorMessage(err)}`)
       console.error(err)
@@ -88,25 +78,10 @@ function Dashboard() {
     [tractionStats]
   )
 
-  const serviceTypeStats = useMemo(() => {
-    const counts = {}
-
-    tripSamples.forEach((trip) => {
-      const rawValue =
-        trip?.service_type ??
-        trip?.day_night_type ??
-        trip?.service_period ??
-        trip?.trip_period ??
-        trip?.time_of_day
-
-      const label = normalizeServiceType(rawValue)
-      counts[label] = (counts[label] || 0) + 1
-    })
-
-    return Object.entries(counts)
-      .map(([service_type, trip_count]) => ({ service_type, trip_count }))
-      .sort((a, b) => (b.trip_count ?? 0) - (a.trip_count ?? 0))
-  }, [tripSamples])
+  const sortedServiceTypeStats = useMemo(
+    () => [...serviceTypeStats].sort((a, b) => (b?.trip_count ?? 0) - (a?.trip_count ?? 0)),
+    [serviceTypeStats]
+  )
 
   const cards = useMemo(
     () => [
@@ -313,13 +288,12 @@ function Dashboard() {
           <ChartCard
             title="Répartition jour / nuit"
             subtitle="Comparaison des trajets selon le service de jour ou de nuit."
-            data={serviceTypeStats}
+            data={sortedServiceTypeStats}
             dataKey="trip_count"
             nameKey="service_type"
-            axisFormatter={(value) => formatInteger(value)}
             valueFormatter={(value) => `${formatInteger(value)} trajets`}
-            barColor="#c29a54"
-            badgeLabel={`${serviceTypeStats.length} type${serviceTypeStats.length > 1 ? 's' : ''}`}
+            variant="pie"
+            badgeLabel={`${sortedServiceTypeStats.length} type${sortedServiceTypeStats.length > 1 ? 's' : ''}`}
           />
 
           <ChartCard

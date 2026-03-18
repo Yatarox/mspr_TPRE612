@@ -105,12 +105,13 @@ async def get_emissions_by_route(limit: int):
 
 
 async def search_trips(
-        origin,
-        destination,
-        train_type,
-        min_distance,
-        max_distance,
-        limit):
+    origin,
+    destination,
+    train_type,
+    min_distance,
+    max_distance,
+    limit
+):
     where_clauses = []
     params = []
 
@@ -126,42 +127,61 @@ async def search_trips(
         where_clauses.append("tt.train_type = %s")
         params.append(train_type)
 
-    if min_distance:
+    if min_distance is not None:
         where_clauses.append("f.distance_km >= %s")
         params.append(min_distance)
 
-    if max_distance:
+    if max_distance is not None:
         where_clauses.append("f.distance_km <= %s")
         params.append(max_distance)
 
     where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
-    params.append(limit)
 
     query = (
-        "SELECT t.trip_id, r.route_name, a.agency_name, lo.stop_name as origin, "
-        "ld.stop_name as destination, co.country_code as origin_country, "
-        "cd.country_code as destination_country, tdep.time_value as departure_time, "
-        "tarr.time_value as arrival_time, f.distance_km, f.duration_h, "
-        "tt.train_type, tr.traction, f.emission_gco2e_pkm, "
-        "f.total_emission_kgco2e, f.frequency_per_week "
-        "FROM fact_trip_summary f "
-        "JOIN dim_trip t ON t.trip_sk = f.trip_sk "
-        "JOIN dim_route r ON r.route_sk = f.route_sk "
-        "JOIN dim_agency a ON a.agency_sk = f.agency_sk "
-        "LEFT JOIN dim_location lo ON lo.location_sk = f.origin_location_sk "
-        "LEFT JOIN dim_location ld ON ld.location_sk = f.destination_location_sk "
-        "LEFT JOIN dim_country co ON co.country_sk = f.origin_country_sk "
-        "LEFT JOIN dim_country cd ON cd.country_sk = f.destination_country_sk "
-        "LEFT JOIN dim_time tdep ON tdep.time_sk = f.departure_time_sk "
-        "LEFT JOIN dim_time tarr ON tarr.time_sk = f.arrival_time_sk "
-        "LEFT JOIN dim_train_type tt ON tt.train_type_sk = f.train_type_sk "
-        "LEFT JOIN dim_traction tr ON tr.traction_sk = f.traction_sk "
-        f"WHERE {where_sql} "
-        "ORDER BY f.distance_km DESC "
+        "WITH ranked AS ("
+        "  SELECT "
+        "    f.fact_sk, f.trip_sk, f.service_sk, f.dataset_sk, "
+        "    f.distance_km, f.duration_h, f.total_emission_kgco2e, f.frequency_per_week, f.last_loaded_at, "
+        "    t.trip_id, "
+        "    r.route_name, a.agency_name, "
+        "    lo.stop_name AS origin, ld.stop_name AS destination, "
+        "    co.country_code AS origin_country, cd.country_code AS destination_country, "
+        "    tdep.time_value AS departure_time, tarr.time_value AS arrival_time, "
+        "    tt.train_type, tr.traction, "
+        "    ds.service_type AS service_type, "
+        "    CASE "
+        "      WHEN UPPER(COALESCE(ds.service_type,'')) = 'JOUR' THEN 'Jour' "
+        "      WHEN UPPER(COALESCE(ds.service_type,'')) = 'NUIT' THEN 'Nuit' "
+        "      ELSE 'Autre / Non renseigné' "
+        "    END AS service_label, "
+        "    ROW_NUMBER() OVER ("
+        "      PARTITION BY t.trip_id "
+        "      ORDER BY f.last_loaded_at DESC, f.fact_sk DESC"
+        "    ) AS rn "
+        "  FROM fact_trip_summary f "
+        "  JOIN dim_trip t ON t.trip_sk = f.trip_sk "
+        "  JOIN dim_route r ON r.route_sk = f.route_sk "
+        "  JOIN dim_agency a ON a.agency_sk = f.agency_sk "
+        "  LEFT JOIN dim_location lo ON lo.location_sk = f.origin_location_sk "
+        "  LEFT JOIN dim_location ld ON ld.location_sk = f.destination_location_sk "
+        "  LEFT JOIN dim_country co ON co.country_sk = f.origin_country_sk "
+        "  LEFT JOIN dim_country cd ON cd.country_sk = f.destination_country_sk "
+        "  LEFT JOIN dim_time tdep ON tdep.time_sk = f.departure_time_sk "
+        "  LEFT JOIN dim_time tarr ON tarr.time_sk = f.arrival_time_sk "
+        "  LEFT JOIN dim_train_type tt ON tt.train_type_sk = f.train_type_sk "
+        "  LEFT JOIN dim_traction tr ON tr.traction_sk = f.traction_sk "
+        "  LEFT JOIN dim_service_type ds ON ds.service_sk = f.service_sk "
+        f"  WHERE {where_sql} "
+        ") "
+        "SELECT * FROM ranked WHERE rn = 1 "
+        "ORDER BY distance_km DESC "
         "LIMIT %s"
     )
 
+    params.append(limit if limit is not None else 50)
     return await execute_query(query, tuple(params))
+
+
 
 
 async def get_health():
@@ -182,3 +202,30 @@ async def get_health():
             "error": str(e),
             "timestamp": datetime.utcnow().isoformat()
         }
+    
+
+# ...existing code...
+
+async def get_stats_by_service_type():
+    query = """
+        SELECT
+            CASE
+                WHEN UPPER(COALESCE(ds.service_type, '')) = 'JOUR' THEN 'Jour'
+                WHEN UPPER(COALESCE(ds.service_type, '')) = 'NUIT' THEN 'Nuit'
+                ELSE 'Autre / Non renseigné'
+            END AS service_type,
+            COUNT(DISTINCT f.trip_sk) AS trip_count
+        FROM fact_trip_summary f
+        LEFT JOIN dim_service_type ds ON ds.service_sk = f.service_sk
+        GROUP BY
+            CASE
+                WHEN UPPER(COALESCE(ds.service_type, '')) = 'JOUR' THEN 'Jour'
+                WHEN UPPER(COALESCE(ds.service_type, '')) = 'NUIT' THEN 'Nuit'
+                ELSE 'Autre / Non renseigné'
+            END
+        ORDER BY trip_count DESC
+    """
+    return await execute_query(query)
+
+# ...existing code...
+
