@@ -184,6 +184,50 @@ async def search_trips(
 
 
 
+async def get_map_routes(hour_from=None, hour_to=None, limit=500):
+    where_parts = ["lo.stop_name IS NOT NULL", "ld.stop_name IS NOT NULL"]
+    params = []
+
+    if hour_from is not None:
+        where_parts.append("tdep.hour >= %s")
+        params.append(hour_from)
+    if hour_to is not None:
+        where_parts.append("tdep.hour < %s")
+        params.append(hour_to)
+
+    where_sql = " AND ".join(where_parts)
+    params.append(limit)
+
+    query = f"""
+        SELECT
+            lo.stop_name AS origin,
+            COALESCE(co.country_code, '') AS origin_country,
+            ld.stop_name AS destination,
+            COALESCE(cd.country_code, '') AS destination_country,
+            tdep.hour AS departure_hour,
+            tdep.time_value AS departure_time,
+            tarr.time_value AS arrival_time,
+            r.route_name,
+            a.agency_name,
+            COUNT(DISTINCT f.trip_sk) AS trip_count
+        FROM fact_trip_summary f
+        LEFT JOIN dim_location lo ON lo.location_sk = f.origin_location_sk
+        LEFT JOIN dim_location ld ON ld.location_sk = f.destination_location_sk
+        LEFT JOIN dim_country co ON co.country_sk = f.origin_country_sk
+        LEFT JOIN dim_country cd ON cd.country_sk = f.destination_country_sk
+        LEFT JOIN dim_time tdep ON tdep.time_sk = f.departure_time_sk
+        LEFT JOIN dim_time tarr ON tarr.time_sk = f.arrival_time_sk
+        LEFT JOIN dim_route r ON r.route_sk = f.route_sk
+        LEFT JOIN dim_agency a ON a.agency_sk = f.agency_sk
+        WHERE {where_sql}
+        GROUP BY lo.stop_name, ld.stop_name, co.country_code, cd.country_code,
+                 tdep.hour, tdep.time_value, tarr.time_value, r.route_name, a.agency_name
+        ORDER BY trip_count DESC
+        LIMIT %s
+    """
+    return await execute_query(query, tuple(params))
+
+
 async def get_health():
     try:
         result = await execute_query(

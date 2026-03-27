@@ -1,0 +1,332 @@
+/* =========================================================
+   LiveMap — page "Trajet en direct"
+   Suit le code couleur de App.css
+   ========================================================= */
+
+/* -- Conteneur page ---------------------------------------- */
+.livemap-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* -- En-tête ----------------------------------------------- */
+.livemap-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 28px;
+  border-radius: var(--radius-xl);
+  background: var(--surface);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--stroke);
+  box-shadow: var(--shadow-md);
+}
+
+.livemap-header-copy .section-pill {
+  margin-bottom: 2px;
+}
+
+.livemap-header-copy h2 {
+  margin-top: 12px;
+  font-size: clamp(1.6rem, 2.6vw, 2.1rem);
+  letter-spacing: -0.035em;
+  color: var(--text);
+}
+
+.livemap-header-copy p {
+  margin-top: 10px;
+  color: var(--text-soft);
+  line-height: 1.65;
+  max-width: 640px;
+}
+
+/* -- Chips stats en-tête ----------------------------------- */
+.livemap-stats-row {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.livemap-stat-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 100px;
+  padding: 16px 20px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, #ffffff, #f8fbff);
+  border: 1px solid var(--stroke);
+  text-align: center;
+}
+
+.livemap-stat-value {
+  font-size: 1.8rem;
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  color: var(--navy);
+  line-height: 1;
+}
+
+.livemap-stat-label {
+  margin-top: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* -- Barre de filtres horaires ----------------------------- */
+.livemap-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 18px 22px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--stroke);
+  box-shadow: var(--shadow-sm);
+}
+
+.livemap-filter-label {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-soft);
+  white-space: nowrap;
+}
+
+.livemap-filter-pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.livemap-filter-pill {
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  background: #f6f8fb;
+  color: var(--text-soft);
+  border: 1px solid var(--stroke);
+  transition:
+    background 0.18s ease,
+    color 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.livemap-filter-pill:hover {
+  background: rgba(44, 95, 221, 0.08);
+  color: var(--blue-dark);
+  border-color: rgba(44, 95, 221, 0.20);
+  transform: translateY(-1px);
+}
+
+.livemap-filter-pill.active {
+  background: linear-gradient(135deg, var(--blue), var(--blue-dark));
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: 0 8px 20px rgba(44, 95, 221, 0.28);
+}
+
+/* -- Wrapper carte ----------------------------------------- */
+.livemap-map-wrapper {
+  position: relative;
+  height: 620px;
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  border: 1px solid var(--stroke);
+  box-shadow: var(--shadow-md);
+  background: #d6e4f0;
+}
+
+/* Override Leaflet pour arrondir les coins */
+.livemap-map-wrapper .leaflet-container {
+  border-radius: var(--radius-xl);
+  font-family: inherit;
+}
+
+/* -- Overlay chargement / erreur -------------------------- */
+.livemap-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 900;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: rgba(238, 243, 250, 0.88);
+  backdrop-filter: blur(6px);
+  color: var(--text);
+  font-weight: 600;
+  text-align: center;
+  padding: 28px;
+}
+
+.livemap-error {
+  background: rgba(182, 61, 61, 0.07);
+  color: var(--danger);
+}
+
+.livemap-error code {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.82rem;
+  font-family: monospace;
+  background: rgba(182, 61, 61, 0.10);
+  padding: 6px 10px;
+  border-radius: 8px;
+}
+
+.livemap-spinner {
+  width: 44px;
+  height: 44px;
+  border: 4px solid rgba(44, 95, 221, 0.16);
+  border-top-color: var(--blue);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* -- Légende ----------------------------------------------- */
+.livemap-legend {
+  position: absolute;
+  bottom: 18px;
+  left: 18px;
+  z-index: 800;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--stroke);
+  box-shadow: var(--shadow-sm);
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.livemap-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.livemap-legend-dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.livemap-legend-station {
+  background: var(--navy);
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 0 1px var(--navy);
+}
+
+.livemap-legend-line {
+  display: inline-block;
+  width: 26px;
+  height: 3px;
+  background: #b63d3d;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+/* -- Tooltip Leaflet --------------------------------------- */
+.livemap-tooltip {
+  font-family: Inter, 'Segoe UI', Roboto, sans-serif;
+  font-size: 0.84rem;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.livemap-tooltip strong {
+  font-size: 0.9rem;
+}
+
+.livemap-tooltip-arrow {
+  color: var(--text-soft);
+  font-size: 0.78rem;
+}
+
+.livemap-tooltip-time {
+  margin-top: 4px;
+  font-size: 0.82rem;
+  color: var(--blue-dark);
+  font-weight: 700;
+}
+
+.livemap-tooltip-route {
+  font-size: 0.8rem;
+  color: var(--text-soft);
+  margin-top: 2px;
+}
+
+.livemap-tooltip-agency {
+  font-size: 0.78rem;
+  color: var(--slate);
+  font-style: italic;
+}
+
+/* -- Message vide ------------------------------------------ */
+.livemap-empty {
+  padding: 22px 28px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  border: 1px dashed var(--stroke-strong);
+  color: var(--text-soft);
+  text-align: center;
+  font-weight: 600;
+}
+
+/* -- Responsive -------------------------------------------- */
+@media (max-width: 900px) {
+  .livemap-header {
+    flex-direction: column;
+  }
+
+  .livemap-stats-row {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .livemap-map-wrapper {
+    height: 480px;
+  }
+}
+
+@media (max-width: 600px) {
+  .livemap-filter-bar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .livemap-map-wrapper {
+    height: 380px;
+  }
+
+  .livemap-stat-chip {
+    flex: 1;
+    min-width: 80px;
+  }
+}

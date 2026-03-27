@@ -63,6 +63,16 @@ async def search_trips(
         limit=limit,
     )
 
+@router.get("/map/routes")
+async def get_map_routes(
+    hour_from: Optional[int] = Query(None, ge=0, description="Heure de début (incluse)"),
+    hour_to: Optional[int] = Query(None, ge=1, description="Heure de fin (exclue)"),
+    limit: int = Query(default=500, ge=1, le=2000),
+):
+    """Retourne les trajets avec gares d'origine/destination pour la carte, filtrable par heure"""
+    return await dashboard_service.get_map_routes(hour_from=hour_from, hour_to=hour_to, limit=limit)
+
+
 @router.get("/stats/by-service-type")
 async def get_stats_by_service_type():
     return await dashboard_service.get_stats_by_service_type()
