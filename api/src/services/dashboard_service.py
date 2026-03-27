@@ -184,6 +184,86 @@ async def search_trips(
 
 
 
+async def get_trip_shapes(hour_from=None, hour_to=None, limit=150):
+    # Étape 1 : récupérer les shapes distincts correspondant au filtre horaire
+    where_parts = ["dt.shape_sk IS NOT NULL"]
+    params = []
+
+    if hour_from is not None:
+        where_parts.append("tdep.hour >= %s")
+        params.append(hour_from)
+    if hour_to is not None:
+        where_parts.append("tdep.hour < %s")
+        params.append(hour_to)
+
+    where_sql = " AND ".join(where_parts)
+    params.append(limit)
+
+    shapes_query = f"""
+        SELECT DISTINCT
+            dt.shape_sk,
+            lo.stop_name  AS origin,
+            ld.stop_name  AS destination,
+            tdep.time_value AS departure_time,
+            tarr.time_value AS arrival_time,
+            r.route_name,
+            a.agency_name
+        FROM fact_trip_summary f
+        JOIN dim_trip dt       ON dt.trip_sk  = f.trip_sk
+        LEFT JOIN dim_location lo  ON lo.location_sk  = f.origin_location_sk
+        LEFT JOIN dim_location ld  ON ld.location_sk  = f.destination_location_sk
+        LEFT JOIN dim_time tdep    ON tdep.time_sk     = f.departure_time_sk
+        LEFT JOIN dim_time tarr    ON tarr.time_sk     = f.arrival_time_sk
+        LEFT JOIN dim_route r      ON r.route_sk       = f.route_sk
+        LEFT JOIN dim_agency a     ON a.agency_sk      = f.agency_sk
+        WHERE {where_sql}
+        LIMIT %s
+    """
+    shape_rows = await execute_query(shapes_query, tuple(params))
+    if not shape_rows:
+        return []
+
+    # Étape 2 : récupérer tous les points GPS pour ces shapes
+    shape_sks = list({row["shape_sk"] for row in shape_rows})
+    placeholders = ", ".join(["%s"] * len(shape_sks))
+
+    points_query = f"""
+        SELECT shape_sk, pt_sequence, lat, lon
+        FROM dim_shape_point
+        WHERE shape_sk IN ({placeholders})
+        ORDER BY shape_sk, pt_sequence
+    """
+    point_rows = await execute_query(points_query, tuple(shape_sks))
+
+    # Étape 3 : grouper les points par shape_sk
+    points_by_shape: dict = {}
+    for p in (point_rows or []):
+        sk = p["shape_sk"]
+        if sk not in points_by_shape:
+            points_by_shape[sk] = []
+        points_by_shape[sk].append([float(p["lat"]), float(p["lon"])])
+
+    # Étape 4 : assembler la réponse finale
+    result = []
+    for row in shape_rows:
+        sk = row["shape_sk"]
+        pts = points_by_shape.get(sk, [])
+        if len(pts) < 2:
+            continue
+        result.append({
+            "shape_sk":      sk,
+            "origin":        row["origin"],
+            "destination":   row["destination"],
+            "departure_time":row["departure_time"],
+            "arrival_time":  row["arrival_time"],
+            "route_name":    row["route_name"],
+            "agency_name":   row["agency_name"],
+            "points":        pts,
+        })
+
+    return result
+
+
 async def get_map_routes(hour_from=None, hour_to=None, limit=500):
     where_parts = ["lo.stop_name IS NOT NULL", "ld.stop_name IS NOT NULL"]
     params = []

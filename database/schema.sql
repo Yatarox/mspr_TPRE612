@@ -16,31 +16,18 @@ CREATE TABLE dim_dataset (
 
 DROP TABLE IF EXISTS dim_shape;
 CREATE TABLE dim_shape (
-  shape_sk  BIGINT AUTO_INCREMENT PRIMARY KEY,
-  shape_id  VARCHAR(255) NOT NULL,
+  shape_sk BIGINT AUTO_INCREMENT PRIMARY KEY,
+  shape_id VARCHAR(255) NOT NULL,
   UNIQUE KEY uq_dim_shape_id (shape_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-DROP TABLE IF EXISTS dim_shape_point;
-CREATE TABLE dim_shape_point (
-  point_sk    BIGINT AUTO_INCREMENT PRIMARY KEY,
-  shape_sk    BIGINT NOT NULL,
-  pt_sequence INT NOT NULL,
-  lat         DECIMAL(9,6) NOT NULL,
-  lon         DECIMAL(9,6) NOT NULL,
-  KEY idx_shape_point_shape (shape_sk),
-  CONSTRAINT fk_shape_point_shape
-    FOREIGN KEY (shape_sk) REFERENCES dim_shape(shape_sk)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 DROP TABLE IF EXISTS dim_trip;
 CREATE TABLE dim_trip (
-  trip_sk  BIGINT AUTO_INCREMENT PRIMARY KEY,
-  trip_id  VARCHAR(255) NOT NULL,
+  trip_sk BIGINT AUTO_INCREMENT PRIMARY KEY,
+  trip_id VARCHAR(255) NOT NULL,
   shape_sk BIGINT NULL,
   UNIQUE KEY uq_dim_trip_id (trip_id),
-  CONSTRAINT fk_trip_shape
-    FOREIGN KEY (shape_sk) REFERENCES dim_shape(shape_sk)
+  CONSTRAINT fk_trip_shape FOREIGN KEY (shape_sk) REFERENCES dim_shape(shape_sk)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 DROP TABLE IF EXISTS dim_route;
@@ -107,6 +94,18 @@ CREATE TABLE dim_time (
   minute TINYINT,
   second TINYINT,
   UNIQUE KEY uq_dim_time_value (time_value)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+DROP TABLE IF EXISTS dim_shape_point;
+CREATE TABLE dim_shape_point (
+  point_sk BIGINT AUTO_INCREMENT PRIMARY KEY,
+  shape_sk BIGINT NOT NULL,
+  pt_sequence INT NOT NULL,
+  lat DECIMAL(9,6) NOT NULL,
+  lon DECIMAL(9,6) NOT NULL,
+  KEY idx_shape_point_shape (shape_sk),
+  CONSTRAINT fk_shape_point_shape
+    FOREIGN KEY (shape_sk) REFERENCES dim_shape(shape_sk)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- =========================================================
@@ -190,3 +189,5 @@ CREATE TABLE stg_trips_summary (
   KEY idx_stg_load_stgid (load_id, stg_id),
   KEY idx_stg_load_trip (load_id, trip_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+

@@ -7,7 +7,7 @@ import './LiveMap.css'
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 // ---------------------------------------------------------------------------
-// Dictionnaire de coordonnées des grandes gares européennes
+// Dictionnaire de coordonnées des grandes gares européennes (fallback uniquement)
 // Clé = fragment du nom de gare (insensible à la casse)
 // ---------------------------------------------------------------------------
 const STATION_COORDS = {
@@ -296,7 +296,7 @@ const HOUR_RANGES = [
 // Composant principal
 // ---------------------------------------------------------------------------
 export default function LiveMap() {
-  const [routes, setRoutes] = useState([])
+  const [shapes, setShapes] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [selectedRange, setSelectedRange] = useState(0) // index dans HOUR_RANGES
@@ -310,9 +310,9 @@ export default function LiveMap() {
     if (range.from !== null) params.hour_from = range.from
     if (range.to   !== null) params.hour_to   = range.to
 
-    axios.get(`${API_BASE}/api/map/routes`, { params })
+    axios.get(`${API_BASE}/api/map/shapes`, { params })
       .then(res => {
-        setRoutes(res.data || [])
+        setShapes(res.data || [])
         setLoading(false)
       })
       .catch(err => {
@@ -321,41 +321,41 @@ export default function LiveMap() {
       })
   }, [selectedRange])
 
-  // Construire la liste des segments et des gares résolus
+  // Construire la liste des segments (tracés GPS réels) et des gares (1er/dernier point)
   const { segments, stations } = useMemo(() => {
     const stationMap = new Map()
     const segs = []
 
-    for (const r of routes) {
-      const oCoords = resolveCoords(r.origin)
-      const dCoords = resolveCoords(r.destination)
-      if (!oCoords || !dCoords) continue
-
-      // Évite les trajets vers soi-même
-      if (oCoords[0] === dCoords[0] && oCoords[1] === dCoords[1]) continue
+    for (const s of shapes) {
+      if (!s.points || s.points.length < 2) continue
 
       segs.push({
-        positions: [oCoords, dCoords],
-        origin: r.origin,
-        destination: r.destination,
-        departure: r.departure_time,
-        arrival: r.arrival_time,
-        route: r.route_name,
-        agency: r.agency_name,
-        count: r.trip_count,
+        positions: s.points,          // tableau [[lat,lon], ...] issu de la BDD
+        origin: s.origin,
+        destination: s.destination,
+        departure: s.departure_time,
+        arrival: s.arrival_time,
+        route: s.route_name,
+        agency: s.agency_name,
       })
 
-      if (!stationMap.has(r.origin)) stationMap.set(r.origin, { coords: oCoords, name: r.origin, count: 0 })
-      if (!stationMap.has(r.destination)) stationMap.set(r.destination, { coords: dCoords, name: r.destination, count: 0 })
-      stationMap.get(r.origin).count += r.trip_count
-      stationMap.get(r.destination).count += r.trip_count
+      // Premier point = gare d'origine, dernier point = gare de destination
+      const oCoords = s.points[0]
+      const dCoords = s.points[s.points.length - 1]
+
+      if (s.origin && !stationMap.has(s.origin)) {
+        stationMap.set(s.origin, { coords: oCoords, name: s.origin })
+      }
+      if (s.destination && !stationMap.has(s.destination)) {
+        stationMap.set(s.destination, { coords: dCoords, name: s.destination })
+      }
     }
 
     return { segments: segs, stations: [...stationMap.values()] }
-  }, [routes])
+  }, [shapes])
 
   const resolvedCount = stations.length
-  const totalRoutes = routes.length
+  const totalRoutes = shapes.length
 
   return (
     <div className="livemap-page">
@@ -366,7 +366,7 @@ export default function LiveMap() {
           <h2>Trajet en direct</h2>
           <p>
             Visualisez les liaisons ferroviaires européennes sur la carte.
-            Chaque ligne rouge représente un trajet entre deux gares.
+            Chaque tracé suit exactement le parcours GPS réel du train.
           </p>
         </div>
         <div className="livemap-stats-row">
@@ -380,7 +380,7 @@ export default function LiveMap() {
           </div>
           <div className="livemap-stat-chip">
             <span className="livemap-stat-value">{totalRoutes}</span>
-            <span className="livemap-stat-label">Trajets en BDD</span>
+            <span className="livemap-stat-label">Shapes chargés</span>
           </div>
         </div>
       </div>
@@ -433,13 +433,6 @@ export default function LiveMap() {
             subdomains="abcd"
           />
 
-          <TileLayer
-            attribution='&copy; <a href="https://www.openrailwaymap.org/">OpenRailwayMap</a>'
-            url="https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png"
-            subdomains="abcd"
-            opacity={0.4}
-
-          />
           {/* Lignes rouges = trajets */}
           {!loading && segments.map((seg, i) => (
             <Polyline
@@ -484,7 +477,6 @@ export default function LiveMap() {
               <Tooltip direction="top" offset={[0, -6]}>
                 <div className="livemap-tooltip">
                   <strong>{st.name}</strong>
-                  <div className="livemap-tooltip-route">{st.count} trajet{st.count > 1 ? 's' : ''}</div>
                 </div>
               </Tooltip>
             </CircleMarker>
@@ -511,8 +503,8 @@ export default function LiveMap() {
         <div className="livemap-empty">
           <p>Aucun trajet localisé pour ce filtre horaire.</p>
           <p style={{ marginTop: 6, fontSize: '0.88rem', opacity: 0.7 }}>
-            Les gares dont les coordonnées sont inconnues ne sont pas affichées.
-            {totalRoutes > 0 ? ` (${totalRoutes} trajets en BDD, 0 localisés)` : ' Vérifiez la connexion à l\'API.'}
+            Aucun shape GPS disponible pour ce filtre horaire.
+            {totalRoutes > 0 ? ` (${totalRoutes} shapes chargés, aucun avec assez de points)` : ' Vérifiez la connexion à l\'API ou relancez l\'ETL.'}
           </p>
         </div>
       )}

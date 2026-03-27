@@ -275,6 +275,7 @@ def gtfs_full_etl():
             result = load_gtfs(
                 processed_dir,
                 conn_id=db_conn_id,
+                staging_dir=staging_dir,
             )
 
             duration = (datetime.now() - start_time).total_seconds()

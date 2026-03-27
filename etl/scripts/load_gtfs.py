@@ -13,6 +13,7 @@ from load_script.helpers import get_staging_country_limits
 from load_script.fact_loader import load_fact_table
 from load_script.dimension_cache import dim_cache
 from load_script.staging import load_staging_table
+from load_script.shape_loader import load_shapes_for_dataset
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -22,9 +23,11 @@ logger.info(f"[BOOT] {VERSION}")
 
 
 def load_gtfs(processed_dir: str,
-              conn_id: str = "mysql_default") -> Dict[str, Any]:
+              conn_id: str = "mysql_default",
+              staging_dir: str = None) -> Dict[str, Any]:
     hook = MySqlHook(mysql_conn_id=conn_id)
     processed = Path(processed_dir)
+    staging = Path(staging_dir) if staging_dir else None
 
     if not processed.exists():
         raise AirflowException(f"Directory not found: {processed}")
@@ -74,6 +77,14 @@ def load_gtfs(processed_dir: str,
         total_loaded += processed_count
         datasets_done += 1
         logger.info(f"✓ Dataset {dataset_id}: {processed_count} facts loaded")
+
+        # Chargement des shapes si le dossier staging est fourni
+        if staging is not None:
+            staging_dataset_dir = staging / str(dataset_id)
+            if staging_dataset_dir.exists():
+                load_shapes_for_dataset(hook, staging_dataset_dir, dataset_id)
+            else:
+                logger.info(f"[shapes] Dossier staging introuvable pour dataset {dataset_id}: {staging_dataset_dir}")
 
         dim_cache.clear()
 

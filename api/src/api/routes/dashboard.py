@@ -63,6 +63,16 @@ async def search_trips(
         limit=limit,
     )
 
+@router.get("/map/shapes")
+async def get_map_shapes(
+    hour_from: Optional[int] = Query(None, ge=0, description="Heure de début (incluse)"),
+    hour_to: Optional[int] = Query(None, ge=1, description="Heure de fin (exclue)"),
+    limit: int = Query(default=150, ge=1, le=1000),
+):
+    """Retourne les tracés GPS exacts des trajets (depuis dim_shape_point)"""
+    return await dashboard_service.get_trip_shapes(hour_from=hour_from, hour_to=hour_to, limit=limit)
+
+
 @router.get("/map/routes")
 async def get_map_routes(
     hour_from: Optional[int] = Query(None, ge=0, description="Heure de début (incluse)"),
