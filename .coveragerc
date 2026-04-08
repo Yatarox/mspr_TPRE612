@@ -1,0 +1,7 @@
+[run]
+relative_files = True
+source = api/src
+
+[report]
+omit =
+    */tests/*

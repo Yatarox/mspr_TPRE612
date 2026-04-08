@@ -12,6 +12,8 @@ jobs:
     steps:
       - name: 🛎️ Checkout repository
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: 🐍 Set up Python 3.11
         uses: actions/setup-python@v4
@@ -37,7 +39,7 @@ jobs:
       - name: 🧪 Run unit tests with coverage
         run: |
           pip install pytest-cov
-          pytest --cov=api/src --cov-report=xml:api/coverage.xml api/tests
+          pytest --cov=api/src --cov-config=.coveragerc --cov-report=xml:api/coverage.xml api/tests
 
       - name: 📤 Upload coverage report
         uses: actions/upload-artifact@v4
@@ -47,12 +49,5 @@ jobs:
 
       - name: 📊 SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@v2
-        with:
-          projectBaseDir: .
-          args: >
-            -Dsonar.sources=api/src
-            -Dsonar.tests=api/tests
-            -Dsonar.python.coverage.reportPaths=api/coverage.xml
-            -Dsonar.test.inclusions=api/tests/**/*.py
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
