@@ -3,8 +3,6 @@ import sys
 import hashlib
 from unittest.mock import Mock, patch
 
-import pytest
-
 sys.path.append(
     os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 )
