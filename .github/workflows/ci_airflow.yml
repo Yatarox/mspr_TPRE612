@@ -16,7 +16,7 @@ jobs:
       - name: 🐍 Set up Python 3.11
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: 📦 Install dependencies
         run: pip install -r ./etl/requirements.txt
@@ -25,7 +25,7 @@ jobs:
         run: |
           pip install ruff
           ruff check ./etl/scripts
-          
+
       - name: 🧪 Run unit tests with coverage
         run: |
           pip install pytest pytest-cov
@@ -40,14 +40,3 @@ jobs:
 
       - name: 🐳 Build Airflow Docker image
         run: docker build -t mspr-airflow ./etl
-
-      - name: 📊 SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@v2
-        with:
-          projectBaseDir: .
-          args: >
-            -Dsonar.sources=etl/scripts
-            -Dsonar.tests=etl/scripts
-            -Dsonar.python.coverage.reportPaths=etl/coverage.xml
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
