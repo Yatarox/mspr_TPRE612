@@ -75,6 +75,86 @@ def test_get_latest_gtfs_from_api_request_exception(_mock_get):
     assert get_latest_gtfs_from_api("https://api.example.com") is None
 
 
+@patch("scripts.extract_script.gtfs_api.requests.get")
+def test_get_latest_gtfs_from_api_with_fallback_dates(mock_get):
+    """Test quand created_at/updated_at sont dans item au lieu de payload"""
+    mock_get.return_value = _mock_response(
+        {
+            "history": [
+                {
+                    "created_at": "2025-01-01",
+                    "updated_at": "2025-01-02",
+                    "payload": {
+                        "format": "GTFS",
+                        "permanent_url": "https://example.com/b.zip",
+                        "filename": "b.zip",
+                        "dataset_id": "ds_2",
+                    },
+                }
+            ]
+        }
+    )
+    result = get_latest_gtfs_from_api("https://api.example.com")
+    assert result is not None
+    assert result["created_at"] == "2025-01-01"
+    assert result["updated_at"] == "2025-01-02"
+
+
+@patch("scripts.extract_script.gtfs_api.requests.get")
+def test_get_latest_gtfs_from_api_missing_optional_fields(mock_get):
+    """Test avec dataset_id manquant"""
+    mock_get.return_value = _mock_response(
+        {
+            "history": [
+                {
+                    "payload": {
+                        "format": "GTFS",
+                        "permanent_url": "https://example.com/c.zip",
+                        "filename": "c.zip",
+                    }
+                }
+            ]
+        }
+    )
+    result = get_latest_gtfs_from_api("https://api.example.com")
+    assert result is not None
+    assert result["dataset_id"] == ""
+
+
+@patch("scripts.extract_script.gtfs_api.requests.get")
+def test_get_latest_gtfs_from_api_http_error(mock_get):
+    """Test HTTPError après raise_for_status"""
+    mock_get.return_value = _mock_response({}, status_ok=False)
+    result = get_latest_gtfs_from_api("https://api.example.com")
+    assert result is None
+
+
+@patch("scripts.extract_script.gtfs_api.requests.get")
+def test_get_latest_gtfs_from_api_json_decode_error(mock_get):
+    """Test erreur JSON parsing"""
+    mock_resp = Mock()
+    mock_resp.raise_for_status.return_value = None
+    mock_resp.json.side_effect = ValueError("Invalid JSON")
+    mock_get.return_value = mock_resp
+    
+    result = get_latest_gtfs_from_api("https://api.example.com")
+    assert result is None
+
+
+def test_build_download_list_empty_urls():
+    """Test avec liste vide"""
+    result = build_download_list([])
+    assert result == {}
+
+
+@patch("scripts.extract_script.gtfs_api.get_latest_gtfs_from_api")
+def test_build_download_list_all_none(mock_latest):
+    """Test quand toutes les APIs retournent None"""
+    mock_latest.return_value = None
+    result = build_download_list(["https://api1", "https://api2"])
+    assert result == {}
+
+
 @patch("scripts.extract_script.gtfs_api.get_latest_gtfs_from_api")
 def test_build_download_list_filters_and_deduplicates(mock_latest):
     mock_latest.side_effect = [
