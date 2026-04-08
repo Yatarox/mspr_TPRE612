@@ -12,6 +12,8 @@ jobs:
     steps:
       - name: 🛎️ Checkout repository
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: 🐍 Set up Python 3.11
         uses: actions/setup-python@v4
@@ -40,3 +42,12 @@ jobs:
 
       - name: 🐳 Build Airflow Docker image
         run: docker build -t mspr-airflow ./etl
+
+      - name: 📊 SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@v2
+        with:
+          projectBaseDir: .
+          args: >
+            -Dproject.settings=sonar-project-etl.properties
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
