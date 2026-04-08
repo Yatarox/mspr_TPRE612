@@ -46,8 +46,3 @@ jobs:
         with:
           name: coverage-report-api
           path: api/coverage.xml
-
-      - name: 📊 SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@v2
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

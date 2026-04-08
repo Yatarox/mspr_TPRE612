@@ -1,0 +1,42 @@
+name: SonarCloud Analysis
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  sonar:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🛎️ Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 🐍 Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 📦 Install dependencies (API + ETL)
+        run: |
+          pip install -r api/requirements.txt
+          pip install -r etl/requirements.txt
+          pip install pytest pytest-cov
+
+      - name: 🧪 Run API tests with coverage
+        run: |
+          pytest --cov=api/src --cov-config=.coveragerc --cov-report=xml:api/coverage.xml api/tests
+
+      - name: 🧪 Run ETL tests with coverage
+        run: |
+          export PYTHONPATH=$PYTHONPATH:./etl/scripts
+          pytest --cov=etl/scripts --cov-report=xml:etl/coverage.xml etl/scripts
+
+      - name: 📊 SonarCloud Scan
+        uses: SonarSource/sonarqube-scan-action@v5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

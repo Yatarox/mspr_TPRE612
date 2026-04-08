@@ -42,12 +42,3 @@ jobs:
 
       - name: 🐳 Build Airflow Docker image
         run: docker build -t mspr-airflow ./etl
-
-      - name: 📊 SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@v2
-        with:
-          projectBaseDir: .
-          args: >
-            -Dproject.settings=sonar-project-etl.properties
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
