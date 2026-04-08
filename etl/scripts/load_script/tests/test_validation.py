@@ -1,5 +1,12 @@
-from load_script.validation import validate_row
+import os
+import sys
+import pandas
 
+sys.path.append(
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+)
+
+from load_script.validation import validate_row
 def test_validate_row_valid():
     row = {
         "trip_id": "T1",

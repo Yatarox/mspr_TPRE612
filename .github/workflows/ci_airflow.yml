@@ -21,7 +21,9 @@ jobs:
           python-version: "3.11"
 
       - name: 📦 Install dependencies
-        run: pip install -r ./etl/requirements.txt
+        run: |
+          pip install -r ./etl/requirements.txt
+          pip install pandas
 
       - name: 🧹 Lint code with ruff
         run: |
