@@ -30,13 +30,13 @@ jobs:
         run: |
           pip install pytest pytest-cov
           export PYTHONPATH=$PYTHONPATH:./etl/scripts
-          pytest --cov=etl/scripts --cov-report=xml etl/scripts/
+          pytest --cov=etl/scripts --cov-report=xml:etl/coverage.xml etl/scripts/
 
       - name: 📤 Upload coverage report
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-report
-          path: coverage.xml
+          name: coverage-report-airflow
+          path: etl/coverage.xml
 
       - name: 🐳 Build Airflow Docker image
         run: docker build -t mspr-airflow ./etl
@@ -46,6 +46,8 @@ jobs:
         with:
           projectBaseDir: .
           args: >
-            -Dsonar.python.coverage.reportPaths=coverage.xml
+            -Dsonar.sources=etl/scripts
+            -Dsonar.tests=etl/scripts
+            -Dsonar.python.coverage.reportPaths=etl/coverage.xml
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

@@ -45,11 +45,20 @@ jobs:
           name: coverage-report
           path: coverage.xml
 
+      - name: 🧪 Run unit tests with coverage
+        run: |
+          pip install pytest-cov
+          pytest --cov=api/src --cov-report=xml:api/coverage.xml api/tests
+
+
       - name: 📊 SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@v2
         with:
           projectBaseDir: .
           args: >
-            -Dsonar.python.coverage.reportPaths=coverage.xml
+            -Dsonar.sources=api/src
+            -Dsonar.tests=api/tests
+            -Dsonar.python.coverage.reportPaths=api/coverage.xml
+            -Dsonar.test.inclusions=api/tests/**/*.py
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
