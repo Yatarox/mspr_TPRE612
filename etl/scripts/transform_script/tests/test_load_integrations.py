@@ -1,5 +1,12 @@
 import pandas as pd
+import sys
+import os
+# ...existing code...
+sys.path.append(
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+)
 from transform_script.gtfs_geo import compute_distances
+# ...existing code...
 from transform_script.gtfs_time import compute_durations
 from transform_script.gtfs_processing import _process_trips_chunk
 
