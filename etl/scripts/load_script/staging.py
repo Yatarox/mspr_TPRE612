@@ -57,16 +57,16 @@ def load_staging_table(
                     row.get("destination_country"), dest_max_len, f"destination_country row {row_num}")
 
                 if origin_country and len(origin_country) > origin_max_len:
-                    diagnostics.append(
-                        f"row {row_num} origin_country '{origin_country}' len={
-                            len(origin_country)} > {origin_max_len}")
-                    origin_country = origin_country[:origin_max_len]
-                if destination_country and len(
-                        destination_country) > dest_max_len:
-                    diagnostics.append(
-                        f"row {row_num} destination_country '{destination_country}' len={
-                            len(destination_country)} > {dest_max_len}")
-                    destination_country = destination_country[:dest_max_len]
+                    logger.warning(
+                        f"row {row_num} origin_country '{origin_country}' "
+                        f"len={len(origin_country)} > max={origin_max_len}"
+                    )
+
+                if destination_country and len(destination_country) > dest_max_len:
+                    logger.warning(
+                        f"row {row_num} destination_country '{destination_country}' "
+                        f"len={len(destination_country)} > max={dest_max_len}"
+                    )
 
                 batch_values.append((
                     load_id, datetime.now(), dataset_id,
@@ -186,13 +186,11 @@ def load_staging_table(
                         offenders.append(dbg)
                 for dbg in offenders[:10]:
                     logger.error(
-                        f"  offender batch_idx={
-                            dbg['batch_index']} csv_row={
-                            dbg['csv_row_num']} " f"origin='{
-                            dbg['origin_country']}'(len={
-                            dbg['origin_len']}, max={origin_max_len}) " f"dest='{
-                            dbg['destination_country']}'(len={
-                            dbg['dest_len']}, max={dest_max_len})")
+                        f"  offender batch_idx={dbg['batch_index']} "
+                        f"csv_row={dbg['csv_row_num']} "
+                        f"origin='{dbg['origin_country']}'(len={dbg['origin_len']}, max={origin_max_len}) "
+                        f"dest='{dbg['destination_country']}'(len={dbg['dest_len']}, max={dest_max_len})"
+                    )
 
                 for d in diagnostics[:20]:
                     logger.error(f"  diag: {d}")
@@ -209,15 +207,12 @@ def load_staging_table(
                     f"  Chunk {chunk_idx}: +{len(batch_values)} rows (total {loaded_count})")
                 for dbg in batch_debug:
                     logger.info(
-                        f"[PRE-INSERT] chunk={chunk_idx} batch_idx={
-                            dbg['batch_index']} csv_row={
-                            dbg['csv_row_num']} " f"trip={
-                            dbg['trip_id']} route={
-                            dbg['route_id']} " f"origin='{
-                            dbg['origin_country']}'(len={
-                            dbg['origin_len']}) " f"dest='{
-                                dbg['destination_country']}'(len={
-                                    dbg['dest_len']})")
+                        f"[PRE-INSERT] chunk={chunk_idx} batch_idx={dbg['batch_index']} "
+                        f"csv_row={dbg['csv_row_num']} "
+                        f"trip={dbg['trip_id']} route={dbg['route_id']} "
+                        f"origin='{dbg['origin_country']}'(len={dbg['origin_len']}) "
+                        f"dest='{dbg['destination_country']}'(len={dbg['dest_len']})"
+                    )
 
         logger.info(
             f"✓ Loaded {loaded_count} rows into stg_trips_summary (processed {row_num} total rows)")
