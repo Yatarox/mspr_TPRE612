@@ -3,7 +3,6 @@ Tests unitaires pour la route POST /api/predict/co2.
 Lance avec : pytest tests/test_co2_prediction_route.py -v
 """
 
-import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import patch
 import sys

@@ -132,7 +132,6 @@ class TestPredictCO2WithMLModel:
         svc._pipeline = fake_pipeline
         svc._use_fallback = False
 
-        import pandas as pd
         result = svc.predict_co2(500.0, 3.0, 4, "TGV", "Électrique")
 
         fake_pipeline.predict.assert_called_once()

@@ -16,12 +16,8 @@ Output :
     - total_emission_kgco2e : émissions totales estimées pour le trajet
 """
 
-import time
 import logging
-from functools import lru_cache
-from typing import Optional
 
-import numpy as np
 
 logger = logging.getLogger(__name__)
 

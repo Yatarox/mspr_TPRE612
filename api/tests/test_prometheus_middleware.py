@@ -3,8 +3,7 @@ Tests unitaires pour le middleware Prometheus.
 Lance avec : pytest tests/test_prometheus_middleware.py -v
 """
 
-import pytest
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import patch
 from starlette.testclient import TestClient
 from starlette.applications import Starlette
 from starlette.routing import Route
