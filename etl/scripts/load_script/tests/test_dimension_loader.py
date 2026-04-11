@@ -238,7 +238,11 @@ def test_load_dim_location_insert_and_select(monkeypatch):
     monkeypatch.setattr(mod, "dim_cache", _FakeCache())
 
     hook = MagicMock()
-    hook.get_first.side_effect = [None, None, (88,)]
+    hook.get_first.side_effect = [
+        (1,),     # country exists
+        None,     # location not found (before insert)
+        (88,)     # location found (after insert)
+    ]
 
     out = mod.load_dim_location(hook, "Lyon", "FR")
 
@@ -246,7 +250,6 @@ def test_load_dim_location_insert_and_select(monkeypatch):
     assert hook.run.call_count == 1
     insert_params = hook.run.call_args.kwargs["parameters"]
     assert insert_params == ("Lyon", "FR")
-
 
 def test_load_dim_time_none(monkeypatch):
     monkeypatch.setattr(mod, "dim_cache", _FakeCache())
