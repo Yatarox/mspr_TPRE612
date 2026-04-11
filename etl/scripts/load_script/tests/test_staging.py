@@ -31,7 +31,7 @@ sys.path.append(
     os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 )
 
-from load_script.staging import load_staging_table
+from load_script.staging import load_staging_table  # noqa: E402
 
 
 def _write_csv(path: Path):
