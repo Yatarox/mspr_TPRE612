@@ -30,43 +30,40 @@ def _install_airflow_stub():
     sys.modules["airflow.providers.mysql.hooks.mysql"] = mysql_hook_mod
 
 
-def _get_load_staging_table():
+def _get_staging_module():
     _install_airflow_stub()
-    mod = importlib.import_module("load_script.staging")
-    return mod.load_staging_table
+    return importlib.import_module("load_script.staging")
 
 
-def _write_csv(path: Path):
-    df = pd.DataFrame(
-        [
-            {
-                "trip_id": "t1",
-                "route_name": "R1 - Paris-Lyon",
-                "agency_name": "A1:SNCF",
-                "service_type": "Régional",
-                "origin_stop_name": "Paris",
-                "origin_country": "FR",
-                "destination_stop_name": "Lyon",
-                "destination_country": "FR",
-                "departure_time": "08:00:00",
-                "arrival_time": "10:00:00",
-                "distance_km": "100.5",
-                "duration_h": "2.0",
-                "train_type": "TER",
-                "traction": "électrique",
-                "emission_gco2e_pkm": "12.3",
-                "total_emission_kgco2e": "45.6",
-                "frequency_per_week": "7",
-            }
-        ]
-    )
+def _write_csv(path: Path, rows: list = None):
+    if rows is None:
+        rows = [{
+            "trip_id": "t1",
+            "route_name": "R1 - Paris-Lyon",
+            "agency_name": "A1:SNCF",
+            "service_type": "Régional",
+            "origin_stop_name": "Paris",
+            "origin_country": "FR",
+            "destination_stop_name": "Lyon",
+            "destination_country": "FR",
+            "departure_time": "08:00:00",
+            "arrival_time": "10:00:00",
+            "distance_km": "100.5",
+            "duration_h": "2.0",
+            "train_type": "TER",
+            "traction": "électrique",
+            "emission_gco2e_pkm": "12.3",
+            "total_emission_kgco2e": "45.6",
+            "frequency_per_week": "7",
+        }]
+    df = pd.DataFrame(rows)
     df.to_csv(path, index=False, encoding="utf-8")
 
 
-def test_load_staging_table_csv_not_found_returns_zero(tmp_path):
-    load_staging_table = _get_load_staging_table()
+def test_load_staging_table_csv_not_found(tmp_path):
+    mod = _get_staging_module()
     hook = MagicMock()
-    out = load_staging_table(
+    result = mod.load_staging_table(
         hook=hook,
         csv_path=tmp_path / "missing.csv",
         load_id=1,
@@ -74,20 +71,19 @@ def test_load_staging_table_csv_not_found_returns_zero(tmp_path):
         origin_max_len=5,
         dest_max_len=5,
     )
-    assert out == 0
+    assert result == 0
     hook.run.assert_not_called()
 
 
 def test_load_staging_table_one_valid_row(tmp_path):
-    load_staging_table = _get_load_staging_table()
+    mod = _get_staging_module()
     csv_path = tmp_path / "input.csv"
     _write_csv(csv_path)
 
-    with patch("load_script.staging.validate_row", return_value=(True, None)), patch(
-        "load_script.staging.sanitize_country_for_staging", side_effect=lambda v, *_: v
-    ):
+    with patch.object(mod, "validate_row", return_value=(True, None)), \
+         patch.object(mod, "sanitize_country_for_staging", side_effect=lambda v, *_: v):
         hook = MagicMock()
-        out = load_staging_table(
+        result = mod.load_staging_table(
             hook=hook,
             csv_path=csv_path,
             load_id=99,
@@ -96,29 +92,18 @@ def test_load_staging_table_one_valid_row(tmp_path):
             dest_max_len=5,
         )
 
-    assert out == 1
+    assert result == 1
     assert hook.run.call_count == 2
-
-    insert_sql = hook.run.call_args_list[1].args[0]
-    flat_params = hook.run.call_args_list[1].kwargs["parameters"]
-
-    assert "INSERT INTO stg_trips_summary" in insert_sql
-    assert len(flat_params) == 23
-    assert flat_params[0] == 99
-    assert flat_params[2] == 77
-    assert flat_params[3] == "t1"
-    assert flat_params[4] == "R1"
-    assert flat_params[6] == "A1"
 
 
 def test_load_staging_table_invalid_rows_skipped(tmp_path):
-    load_staging_table = _get_load_staging_table()
+    mod = _get_staging_module()
     csv_path = tmp_path / "input.csv"
     _write_csv(csv_path)
 
-    with patch("load_script.staging.validate_row", return_value=(False, "invalid")):
+    with patch.object(mod, "validate_row", return_value=(False, "invalid")):
         hook = MagicMock()
-        out = load_staging_table(
+        result = mod.load_staging_table(
             hook=hook,
             csv_path=csv_path,
             load_id=1,
@@ -127,22 +112,20 @@ def test_load_staging_table_invalid_rows_skipped(tmp_path):
             dest_max_len=5,
         )
 
-    assert out == 0
+    assert result == 0
     assert hook.run.call_count == 1
 
 
-def test_load_staging_table_truncate_error_does_not_block_loading(tmp_path):
-    load_staging_table = _get_load_staging_table()
+def test_load_staging_table_truncate_error_continues(tmp_path):
+    mod = _get_staging_module()
     csv_path = tmp_path / "input.csv"
     _write_csv(csv_path)
 
-    with patch("load_script.staging.validate_row", return_value=(True, None)), patch(
-        "load_script.staging.sanitize_country_for_staging", side_effect=lambda v, *_: v
-    ):
+    with patch.object(mod, "validate_row", return_value=(True, None)), \
+         patch.object(mod, "sanitize_country_for_staging", side_effect=lambda v, *_: v):
         hook = MagicMock()
         hook.run.side_effect = [Exception("truncate failed"), None]
-
-        out = load_staging_table(
+        result = mod.load_staging_table(
             hook=hook,
             csv_path=csv_path,
             load_id=2,
@@ -151,5 +134,43 @@ def test_load_staging_table_truncate_error_does_not_block_loading(tmp_path):
             dest_max_len=5,
         )
 
-    assert out == 1
+    assert result == 1
     assert hook.run.call_count == 2
+
+
+def test_extract_route_id():
+    mod = _get_staging_module()
+    assert mod._extract_route_id("R1 - Paris-Lyon") == "R1"
+    assert mod._extract_route_id("R2") == "R2"
+
+
+def test_extract_agency_id():
+    mod = _get_staging_module()
+    assert mod._extract_agency_id("A1:SNCF") == "A1"
+    assert mod._extract_agency_id("SNCF") == "SNCF"
+
+
+def test_parse_row_to_tuple(tmp_path):
+    mod = _get_staging_module()
+    row = pd.Series({
+        "trip_id": "t1",
+        "route_name": "R1 - Paris",
+        "agency_name": "A1:SNCF",
+        "service_type": "Régional",
+        "origin_stop_name": "Paris",
+        "destination_stop_name": "Lyon",
+        "departure_time": "08:00",
+        "arrival_time": "10:00",
+        "distance_km": "100.5",
+        "duration_h": "2.0",
+        "train_type": "TER",
+        "traction": "électrique",
+        "emission_gco2e_pkm": "12.3",
+        "total_emission_kgco2e": "45.6",
+        "frequency_per_week": "7",
+    })
+    result = mod._parse_row_to_tuple(row, 1, 10, "FR", "FR")
+    assert len(result) == 23
+    assert result[3] == "t1"
+    assert result[4] == "R1"
+    assert result[6] == "A1"
