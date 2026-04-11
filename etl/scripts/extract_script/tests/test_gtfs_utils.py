@@ -18,7 +18,7 @@ def test_calculate_file_hash():
         tmp.write(b"hello world")
         tmp.flush()
         hash_val = calculate_file_hash(tmp.name)
-        assert hash_val == "5eb63bbbe01eeed093cb22bb8f5acdc3"
+        assert hash_val == "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
     os.remove(tmp.name)
 
 

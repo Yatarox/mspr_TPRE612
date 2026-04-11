@@ -8,11 +8,12 @@ GTFS_FILES = [
 ]
 
 def calculate_file_hash(filepath: str) -> str:
-    hash_md5 = hashlib.md5()
+    # Strong non-cryptographic-integrity hash (preferred over MD5 for scanners/policies)
+    hash_sha256 = hashlib.sha256()
     with open(filepath, "rb") as f:
         for chunk in iter(lambda: f.read(4096), b""):
-            hash_md5.update(chunk)
-    return hash_md5.hexdigest()
+            hash_sha256.update(chunk)
+    return hash_sha256.hexdigest()
 
 def check_if_already_extracted(extract_dir: str, filename: str, file_hash: Optional[str] = None) -> bool:
     dataset_name = os.path.splitext(filename)[0]

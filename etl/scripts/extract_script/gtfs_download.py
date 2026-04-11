@@ -9,6 +9,7 @@ from scripts.extract_script.gtfs_utils import calculate_file_hash, check_if_alre
 
 logger = logging.getLogger(__name__)
 
+
 def download_file(url: str, output_path: str, force_download: bool = False) -> Optional[str]:
     if not force_download and os.path.exists(output_path):
         logger.info(f"File already exists: {output_path}")
@@ -18,13 +19,16 @@ def download_file(url: str, output_path: str, force_download: bool = False) -> O
         response = requests.get(url, stream=True, timeout=60)
         response.raise_for_status()
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        hash_md5 = hashlib.md5()
+
+        # Use SHA-256 instead of MD5 to avoid security hotspot
+        hash_sha256 = hashlib.sha256()
+
         with open(output_path, 'wb') as f:
             for chunk in response.iter_content(chunk_size=8192):
                 if chunk:
                     f.write(chunk)
-                    hash_md5.update(chunk)
-        return hash_md5.hexdigest()
+                    hash_sha256.update(chunk)
+        return hash_sha256.hexdigest()
     except Exception as e:
         logger.error(f"Download failed: {e}")
         if os.path.exists(output_path):
