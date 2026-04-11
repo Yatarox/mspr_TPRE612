@@ -1,3 +1,8 @@
+import os 
+import sys
+sys.path.append(
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+)
 from load_script.dimension_cache import DimensionCache
 
 def test_dimension_cache_basic():

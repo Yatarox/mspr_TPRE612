@@ -157,7 +157,6 @@ def load_fact_table(hook, load_id: int) -> int:
           last_loaded_at = VALUES(last_loaded_at)
     """, parameters=(load_id, load_id))
 
-    # Compte fiable: nombre de faits marqués par ce load_id
     row = hook.get_first(
         "SELECT COUNT(*) FROM fact_trip_summary WHERE last_load_id = %s",
         parameters=(

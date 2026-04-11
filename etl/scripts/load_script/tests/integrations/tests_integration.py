@@ -1,3 +1,8 @@
+import os 
+import sys
+sys.path.append(
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+)
 import pytest
 from airflow.providers.mysql.hooks.mysql import MySqlHook
 from load_script.staging import load_staging_table
