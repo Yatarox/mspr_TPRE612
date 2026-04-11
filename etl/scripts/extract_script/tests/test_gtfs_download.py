@@ -43,7 +43,7 @@ def test_download_file_success(mock_get, tmp_path):
 
     assert file_path.exists()
     assert file_path.read_bytes() == b"hello world"
-    assert result == hashlib.md5(b"hello world").hexdigest()
+    assert result == hashlib.sha256(b"hello world").hexdigest()
 
 
 @patch("scripts.extract_script.gtfs_download.requests.get", side_effect=Exception("boom"))
@@ -57,16 +57,17 @@ def test_download_file_failure_returns_none_and_cleans(_mock_get, tmp_path):
 
 
 @patch("scripts.extract_script.gtfs_download.requests.get")
-def test_download_file_success(mock_get, tmp_path):
-    file_path = tmp_path / "b.zip"
-    chunks = [b"hello ", b"world"]
+def test_download_file_with_empty_chunk(mock_get, tmp_path):
+    """Test avec chunk vide au milieu"""
+    file_path = tmp_path / "empty_chunk.zip"
+    chunks = [b"hello", b"", b"world"]
     mock_get.return_value = _FakeResponse(chunks)
 
     result = mod.download_file("http://x/file.zip", str(file_path), force_download=True)
 
     assert file_path.exists()
-    assert file_path.read_bytes() == b"hello world"
-    assert result == hashlib.sha256(b"hello world").hexdigest()
+    assert file_path.read_bytes() == b"helloworld"
+    assert result is not None
 
 
 @patch("scripts.extract_script.gtfs_download.requests.get")

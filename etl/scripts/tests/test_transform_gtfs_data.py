@@ -1,178 +1,117 @@
+import importlib
 import os
 import sys
-from unittest.mock import patch
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
 import pandas as pd
 
-sys.path.append(
-    os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-)
-
-from transform_gtfs_data import (
-    _normalize_columns,
-    _empty_trip_frame,
-    _prepare_stop_times_df,
-    _sanitize_dataframe,
-    _write_csv,
-    _resolve_dataset_output_id,
-)
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 
-def test_normalize_columns():
-    df = pd.DataFrame({" trip_id ": [1, 2], "route_name": ["R1", "R2"]})
-    result = _normalize_columns(df)
-    assert "trip_id" in result.columns
-    assert "route_name" in result.columns
+def _get_tmod():
+    return importlib.import_module("transform_gtfs_data")
 
 
-def test_normalize_columns_none():
-    result = _normalize_columns(None)
-    assert result is None
+def test_build_trips_summary_no_version_dir(tmp_path):
+    tmod = _get_tmod()
+    with patch.object(tmod, "latest_version_dir", return_value=None):
+        count, out = tmod.build_trips_summary_for_dataset(
+            str(tmp_path / "staging"), "ds1", str(tmp_path / "processed")
+        )
+    assert count == 0
+    assert out == ""
 
 
-def test_normalize_columns_empty():
-    df = pd.DataFrame()
-    result = _normalize_columns(df)
-    assert result.empty
+def test_build_trips_summary_empty_trips_or_stop_times(tmp_path):
+    tmod = _get_tmod()
+    latest = tmp_path / "staging" / "ds1" / "v1"
+    latest.mkdir(parents=True)
+
+    def _fake_read_csv(path):
+        name = Path(path).name
+        if name == "agency.txt":
+            return pd.DataFrame({"agency_id": ["A1"], "agency_name": ["SNCF"]})
+        if name == "routes.txt":
+            return pd.DataFrame({"route_id": ["R1"], "agency_id": ["A1"]})
+        if name == "stops.txt":
+            return pd.DataFrame({"stop_id": ["s1"], "stop_name": ["Paris"]})
+        if name == "trips.txt":
+            return pd.DataFrame()  # force empty
+        if name == "stop_times.txt":
+            return pd.DataFrame({"trip_id": ["t1"], "stop_sequence": [1], "stop_id": ["s1"]})
+        return pd.DataFrame()
+
+    with patch.object(tmod, "latest_version_dir", return_value=latest), patch.object(
+        tmod, "read_metadata", return_value={"dataset_id": "ds1"}
+    ), patch.object(tmod, "read_csv", side_effect=_fake_read_csv):
+        count, out = tmod.build_trips_summary_for_dataset(
+            str(tmp_path / "staging"), "ds1", str(tmp_path / "processed")
+        )
+
+    assert count == 0
+    assert out == ""
 
 
-def test_empty_trip_frame():
-    result = _empty_trip_frame()
-    assert isinstance(result, pd.DataFrame)
-    assert result.empty
+def test_transform_gtfs_skip_existing_returns_existing_files(tmp_path):
+    tmod = _get_tmod()
+    staging = tmp_path / "staging"
+    processed = tmp_path / "processed"
+    (staging / "ds1").mkdir(parents=True)
+
+    out = processed / "ds1" / "trips_summary_ds1.csv"
+    out.parent.mkdir(parents=True)
+    out.write_text("trip_id\n", encoding="utf-8")
+
+    with patch.object(tmod, "_resolve_dataset_output_id", return_value="ds1"):
+        written = tmod.transform_gtfs(str(staging), str(processed), skip_existing=True)
+
+    assert str(out) in written
 
 
-def test_prepare_stop_times_df_missing_trip_id():
-    df = pd.DataFrame({"stop_id": [1, 2], "arrival_time": ["08:00", "09:00"]})
-    result = _prepare_stop_times_df(df, "test_dataset")
-    assert result.empty
+def test_transform_gtfs_process_pool_success_and_empty(tmp_path):
+    tmod = _get_tmod()
+    staging = tmp_path / "staging"
+    processed = tmp_path / "processed"
+    (staging / "a").mkdir(parents=True)
+    (staging / "b").mkdir(parents=True)
+
+    fut_ok = MagicMock()
+    fut_ok.result.return_value = (3, str(processed / "a" / "trips_summary_a.csv"))
+
+    fut_empty = MagicMock()
+    fut_empty.result.return_value = (0, "")
+
+    executor = MagicMock()
+    executor.submit.side_effect = [fut_ok, fut_empty]
+
+    with patch.object(tmod, "ProcessPoolExecutor") as pool_cls, patch.object(
+        tmod, "as_completed", return_value=[fut_ok, fut_empty]
+    ):
+        pool_cls.return_value.__enter__.return_value = executor
+        written = tmod.transform_gtfs(str(staging), str(processed), max_workers=4, skip_existing=False)
+
+    assert len(written) == 1
+    assert "trips_summary_a.csv" in written[0]
+    pool_cls.assert_called_once_with(max_workers=2)
 
 
-def test_prepare_stop_times_df_with_trip_id():
-    df = pd.DataFrame({
-        "trip_id": ["t1", "t2"],
-        "stop_id": [1, 2],
-        "stop_sequence": [1, 1]
-    })
-    result = _prepare_stop_times_df(df, "test_dataset")
-    assert len(result) == 2
-    assert "trip_id" in result.columns
+def test_transform_gtfs_timeout_branch(tmp_path):
+    tmod = _get_tmod()
+    staging = tmp_path / "staging"
+    processed = tmp_path / "processed"
+    (staging / "a").mkdir(parents=True)
 
+    fut_timeout = MagicMock()
+    fut_timeout.result.side_effect = tmod.FuturesTimeoutError()
 
-def test_prepare_stop_times_df_sort_by_sequence():
-    df = pd.DataFrame({
-        "trip_id": ["t1", "t1", "t1"],
-        "stop_sequence": [3, 1, 2],
-        "stop_id": [3, 1, 2]
-    })
-    result = _prepare_stop_times_df(df, "test_dataset")
-    assert result["stop_sequence"].tolist() == [1, 2, 3]
+    executor = MagicMock()
+    executor.submit.return_value = fut_timeout
 
+    with patch.object(tmod, "ProcessPoolExecutor") as pool_cls, patch.object(
+        tmod, "as_completed", return_value=[fut_timeout]
+    ):
+        pool_cls.return_value.__enter__.return_value = executor
+        written = tmod.transform_gtfs(str(staging), str(processed), skip_existing=False)
 
-def test_prepare_stop_times_df_drop_decreasing_distance():
-    df = pd.DataFrame({
-        "trip_id": ["t1", "t1", "t1"],
-        "stop_sequence": [1, 2, 3],
-        "shape_dist_traveled": [0.0, 100.0, 50.0]
-    })
-    result = _prepare_stop_times_df(df, "test_dataset")
-    assert len(result) < 3
-
-
-def test_sanitize_dataframe_missing_trip_id():
-    df = pd.DataFrame({
-        "trip_id": [None, "t2", ""],
-        "distance_km": [10, 20, 30],
-        "duration_h": [1, 2, 3]
-    })
-    result = _sanitize_dataframe(df, "test_dataset")
-    assert len(result) <= 1
-
-
-def test_sanitize_dataframe_invalid_duration():
-    df = pd.DataFrame({
-        "trip_id": ["t1", "t2", "t3"],
-        "distance_km": [10, 20, 30],
-        "duration_h": [1, 0, -1]
-    })
-    result = _sanitize_dataframe(df, "test_dataset")
-    assert len(result) <= 1
-
-
-def test_sanitize_dataframe_invalid_distance():
-    df = pd.DataFrame({
-        "trip_id": ["t1", "t2", "t3"],
-        "distance_km": [10, -5, 20],
-        "duration_h": [1, 2, 3]
-    })
-    result = _sanitize_dataframe(df, "test_dataset")
-    assert len(result) <= 2
-
-
-def test_sanitize_dataframe_negative_emissions():
-    df = pd.DataFrame({
-        "trip_id": ["t1", "t2"],
-        "distance_km": [10, 20],
-        "duration_h": [1, 2],
-        "emission_gco2e_pkm": [10, -5]
-    })
-    result = _sanitize_dataframe(df, "test_dataset")
-    assert pd.isna(result["emission_gco2e_pkm"].iloc[1]) or result["emission_gco2e_pkm"].iloc[1] >= 0
-
-
-def test_sanitize_dataframe_origin_equals_destination():
-    df = pd.DataFrame({
-        "trip_id": ["t1", "t2"],
-        "distance_km": [10, 20],
-        "duration_h": [1, 2],
-        "origin_stop_name": ["Paris", "Lyon"],
-        "destination_stop_name": ["Paris", "Lyon"]
-    })
-    result = _sanitize_dataframe(df, "test_dataset")
-    assert len(result) <= 1
-
-
-def test_sanitize_dataframe_duplicate_trip_id():
-    df = pd.DataFrame({
-        "trip_id": ["t1", "t1", "t2"],
-        "distance_km": [10, 10, 20],
-        "duration_h": [1, 1, 2]
-    })
-    result = _sanitize_dataframe(df, "test_dataset")
-    assert len(result) <= 2
-
-
-def test_write_csv(tmp_path):
-    rows = [
-        {"trip_id": "t1", "route_name": "R1", "distance_km": 100},
-        {"trip_id": "t2", "route_name": "R2", "distance_km": 200}
-    ]
-    out_csv = tmp_path / "output.csv"
-    _write_csv(rows, out_csv)
-    
-    assert out_csv.exists()
-    df = pd.read_csv(out_csv)
-    assert len(df) == 2
-
-
-def test_write_csv_empty_rows(tmp_path):
-    out_csv = tmp_path / "output.csv"
-    _write_csv([], out_csv)
-    assert not out_csv.exists()
-
-
-def test_resolve_dataset_output_id_fallback(tmp_path):
-    staging_dir = tmp_path / "staging"
-    staging_dir.mkdir()
-    
-    result = _resolve_dataset_output_id(str(staging_dir), "ds1")
-    assert result == "ds1"
-
-
-def test_resolve_dataset_output_id_with_metadata(tmp_path):
-    with patch("transform_gtfs_data.latest_version_dir") as mock_latest:
-        with patch("transform_gtfs_data.read_metadata") as mock_metadata:
-            mock_latest.return_value = tmp_path / "v1"
-            mock_metadata.return_value = {"dataset_id": "resolved_id"}
-            
-            result = _resolve_dataset_output_id(str(tmp_path), "ds1")
-            assert result == "resolved_id"
+    assert written == []

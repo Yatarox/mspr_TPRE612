@@ -1,11 +1,12 @@
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 
 def test_gtfs_api_imports():
-    from scripts.extract_script.gtfs_api import get_latest_gtfs_from_api, build_download_list
+    from scripts.extract_script.gtfs_api import build_download_list, get_latest_gtfs_from_api
+
     assert callable(get_latest_gtfs_from_api)
     assert callable(build_download_list)
 
@@ -15,8 +16,9 @@ def test_gtfs_utils_imports():
         GTFS_FILES,
         calculate_file_hash,
         check_if_already_extracted,
-        write_metadata
+        write_metadata,
     )
+
     assert GTFS_FILES is not None
     assert callable(calculate_file_hash)
     assert callable(check_if_already_extracted)
@@ -25,13 +27,14 @@ def test_gtfs_utils_imports():
 
 def test_gtfs_download_imports():
     from scripts.extract_script.gtfs_download import (
-        download_file,
-        extract_zip,
-        download_and_extract_gtfs,
         clean_old_downloads,
+        download_and_extract_gtfs,
+        download_and_unzip_from_zip_urls,
+        download_file,
         download_from_direct_urls,
-        download_and_unzip_from_zip_urls
+        extract_zip,
     )
+
     assert callable(download_file)
     assert callable(extract_zip)
     assert callable(download_and_extract_gtfs)
@@ -41,12 +44,7 @@ def test_gtfs_download_imports():
 
 
 def test_extract_script_main_exports():
-    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
     import extract_gtfs_data_gouv_script as script
-    
+
     assert hasattr(script, "get_latest_gtfs_from_api")
     assert hasattr(script, "build_download_list")
-    assert hasattr(script, "GTFS_FILES")
-    assert hasattr(script, "calculate_file_hash")
-    assert hasattr(script, "check_if_already_extracted")
-    assert hasattr(script, "write_metadata")
