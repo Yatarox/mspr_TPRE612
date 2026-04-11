@@ -1,8 +1,3 @@
-"""
-Tests unitaires pour le middleware Prometheus.
-Lance avec : pytest tests/test_prometheus_middleware.py -v
-"""
-
 from unittest.mock import patch
 from starlette.testclient import TestClient
 from starlette.applications import Starlette
@@ -11,7 +6,8 @@ from starlette.responses import JSONResponse, Response
 import sys
 import os
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
+
 
 from middleware.prometheus import PrometheusMiddleware, REQUEST_COUNT, REQUEST_LATENCY
 
