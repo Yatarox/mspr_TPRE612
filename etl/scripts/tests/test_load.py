@@ -1,9 +1,8 @@
+import importlib
 import os
 import sys
 import types
-from pathlib import Path
-from datetime import datetime
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -40,18 +39,21 @@ def _install_airflow_stub():
     sys.modules["airflow.providers.mysql.hooks.mysql"] = mysql_hook_mod
 
 
-_install_airflow_stub()
-
-from load_gtfs import load_gtfs
+def _get_load_gtfs():
+    _install_airflow_stub()
+    mod = importlib.import_module("load_gtfs")
+    return mod.load_gtfs
 
 
 def test_load_gtfs_directory_not_found(tmp_path):
+    load_gtfs = _get_load_gtfs()
     with pytest.raises(Exception) as exc_info:
         load_gtfs(str(tmp_path / "nonexistent"))
     assert "Directory not found" in str(exc_info.value)
 
 
 def test_load_gtfs_no_datasets(tmp_path):
+    load_gtfs = _get_load_gtfs()
     processed_dir = tmp_path / "processed"
     processed_dir.mkdir()
 
@@ -65,6 +67,7 @@ def test_load_gtfs_no_datasets(tmp_path):
 
 
 def test_load_gtfs_dataset_with_no_csv(tmp_path):
+    load_gtfs = _get_load_gtfs()
     processed_dir = tmp_path / "processed"
     dataset_dir = processed_dir / "1"
     dataset_dir.mkdir(parents=True)
@@ -80,6 +83,7 @@ def test_load_gtfs_dataset_with_no_csv(tmp_path):
 
 
 def test_load_gtfs_single_dataset_success(tmp_path):
+    load_gtfs = _get_load_gtfs()
     processed_dir = tmp_path / "processed"
     dataset_dir = processed_dir / "123"
     dataset_dir.mkdir(parents=True)
@@ -103,6 +107,7 @@ def test_load_gtfs_single_dataset_success(tmp_path):
 
 
 def test_load_gtfs_multiple_datasets(tmp_path):
+    load_gtfs = _get_load_gtfs()
     processed_dir = tmp_path / "processed"
 
     for dataset_id in [1, 2, 3]:
@@ -127,6 +132,7 @@ def test_load_gtfs_multiple_datasets(tmp_path):
 
 
 def test_load_gtfs_fallback_csv_name(tmp_path):
+    load_gtfs = _get_load_gtfs()
     processed_dir = tmp_path / "processed"
     dataset_dir = processed_dir / "999"
     dataset_dir.mkdir(parents=True)
@@ -141,7 +147,7 @@ def test_load_gtfs_fallback_csv_name(tmp_path):
         with patch("load_gtfs.get_staging_country_limits", return_value=(3, 3)):
             with patch("load_gtfs.load_staging_table", return_value=50):
                 with patch("load_gtfs.load_fact_table", return_value=50):
-                    with patch("load_gtfs.dim_cache") as mock_cache:
+                    with patch("load_gtfs.dim_cache"):
                         result = load_gtfs(str(processed_dir))
 
                         assert result["total_rows"] == 50
@@ -149,6 +155,7 @@ def test_load_gtfs_fallback_csv_name(tmp_path):
 
 
 def test_load_gtfs_staging_returns_zero(tmp_path):
+    load_gtfs = _get_load_gtfs()
     processed_dir = tmp_path / "processed"
     dataset_dir = processed_dir / "555"
     dataset_dir.mkdir(parents=True)
@@ -162,13 +169,14 @@ def test_load_gtfs_staging_returns_zero(tmp_path):
 
         with patch("load_gtfs.get_staging_country_limits", return_value=(3, 3)):
             with patch("load_gtfs.load_staging_table", return_value=0):
-                with patch("load_gtfs.dim_cache") as mock_cache:
+                with patch("load_gtfs.dim_cache"):
                     with pytest.raises(Exception) as exc_info:
                         load_gtfs(str(processed_dir))
                     assert "No data loaded" in str(exc_info.value)
 
 
 def test_load_gtfs_dataset_id_as_uuid(tmp_path):
+    load_gtfs = _get_load_gtfs()
     processed_dir = tmp_path / "processed"
     dataset_dir = processed_dir / "abc-def-ghi"
     dataset_dir.mkdir(parents=True)
@@ -183,7 +191,7 @@ def test_load_gtfs_dataset_id_as_uuid(tmp_path):
         with patch("load_gtfs.get_staging_country_limits", return_value=(3, 3)):
             with patch("load_gtfs.load_staging_table", return_value=25):
                 with patch("load_gtfs.load_fact_table", return_value=25):
-                    with patch("load_gtfs.dim_cache") as mock_cache:
+                    with patch("load_gtfs.dim_cache"):
                         result = load_gtfs(str(processed_dir))
 
                         assert result["total_rows"] == 25

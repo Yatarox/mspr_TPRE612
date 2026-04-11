@@ -1,10 +1,7 @@
 import os
 import sys
-from pathlib import Path
-from unittest.mock import MagicMock, patch, Mock
+from unittest.mock import patch
 import pandas as pd
-import pytest
-import numpy as np
 
 sys.path.append(
     os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
