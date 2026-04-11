@@ -13,7 +13,6 @@ def test_dimension_cache_basic():
     cache.set("b", 2)
     assert cache.get("b") == 2
     cache.set("c", 3)
-    # "a" should be evicted (FIFO)
     assert cache.get("a") is None
     assert cache.get("c") == 3
     cache.clear()

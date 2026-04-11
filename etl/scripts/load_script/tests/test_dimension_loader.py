@@ -37,7 +37,7 @@ def test_load_dim_trip_insert_then_select(monkeypatch):
     monkeypatch.setattr(mod, "dim_cache", _FakeCache())
 
     hook = MagicMock()
-    hook.get_first.side_effect = [None, (123,)]  # 1er SELECT absent, 2e présent
+    hook.get_first.side_effect = [None, (123,)]
 
     out = mod.load_dim_trip(hook, "TRIP_1")
 
@@ -67,13 +67,12 @@ def test_load_dim_location_country_missing_sets_null(monkeypatch):
     monkeypatch.setattr(mod, "dim_cache", _FakeCache())
 
     hook = MagicMock()
-    # exists country? -> None ; select location before insert -> None ; after insert -> (77,)
+
     hook.get_first.side_effect = [None, None, (77,)]
 
     out = mod.load_dim_location(hook, "Paris Gare", "XX")
 
     assert out == 77
-    # Vérifie que le INSERT a bien reçu country_code = None
     insert_params = hook.run.call_args.kwargs["parameters"]
     assert insert_params == ("Paris Gare", None)
 
@@ -82,7 +81,6 @@ def test_load_dim_time_valid_and_invalid(monkeypatch):
     monkeypatch.setattr(mod, "dim_cache", _FakeCache())
     hook = MagicMock()
 
-    # Cas valide: 26:15:59 -> hour % 24 = 2
     hook.get_first.side_effect = [None, (10,)]
     out = mod.load_dim_time(hook, "26:15:59")
     assert out == 10
