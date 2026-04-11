@@ -2,7 +2,7 @@ name: CI - Airflow Build & Quality
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev, staging]
   pull_request:
     branches: [main]
 
