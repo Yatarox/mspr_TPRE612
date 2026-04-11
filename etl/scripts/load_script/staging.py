@@ -222,3 +222,161 @@ def load_staging_table(
         logger.error(
             f"Staging load failed at row {row_num}: {e}",
             exc_info=True)
+        
+
+
+def test_load_staging_table_sql_insert_error_raises(tmp_path):
+    load_staging_table = _get_load_staging_table()
+    csv_path = tmp_path / "input.csv"
+    _write_csv(csv_path)
+
+    with patch("load_script.staging.validate_row", return_value=(True, None)), patch(
+        "load_script.staging.sanitize_country_for_staging", side_effect=lambda v, *_: v
+    ):
+        hook = MagicMock()
+        hook.run.side_effect = [None, Exception("SQL error")]
+
+        try:
+            load_staging_table(
+                hook=hook,
+                csv_path=csv_path,
+                load_id=5,
+                dataset_id=6,
+                origin_max_len=5,
+                dest_max_len=5,
+            )
+            assert False, "Should raise exception"
+        except Exception as e:
+            assert "SQL error" in str(e)
+
+
+def test_load_staging_table_country_too_long_logged(tmp_path):
+    load_staging_table = _get_load_staging_table()
+    csv_path = tmp_path / "input.csv"
+    
+    df = pd.DataFrame([{
+        "trip_id": "t2",
+        "route_name": "R2",
+        "agency_name": "A2",
+        "service_type": "Regional",
+        "origin_stop_name": "Paris",
+        "origin_country": "TOOLONG",
+        "destination_stop_name": "Lyon",
+        "destination_country": "FR",
+        "departure_time": "08:00:00",
+        "arrival_time": "10:00:00",
+        "distance_km": "100",
+        "duration_h": "2",
+        "train_type": "TER",
+        "traction": "diesel",
+        "emission_gco2e_pkm": "15",
+        "total_emission_kgco2e": "50",
+        "frequency_per_week": "5",
+    }])
+    df.to_csv(csv_path, index=False, encoding="utf-8")
+
+    with patch("load_script.staging.validate_row", return_value=(True, None)), patch(
+        "load_script.staging.sanitize_country_for_staging", side_effect=lambda v, *_: v
+    ):
+        hook = MagicMock()
+        with patch("load_script.staging.logger") as mock_logger:
+            out = load_staging_table(
+                hook=hook,
+                csv_path=csv_path,
+                load_id=7,
+                dataset_id=8,
+                origin_max_len=3,
+                dest_max_len=5,
+            )
+
+            assert out == 1
+            mock_logger.warning.assert_called()
+
+
+def test_load_staging_table_multiple_chunks(tmp_path):
+    load_staging_table = _get_load_staging_table()
+    csv_path = tmp_path / "large.csv"
+    
+    rows = []
+    for i in range(100):
+        rows.append({
+            "trip_id": f"t{i}",
+            "route_name": f"R{i} - Route",
+            "agency_name": f"A{i}:Agency",
+            "service_type": "Regional",
+            "origin_stop_name": "Paris",
+            "origin_country": "FR",
+            "destination_stop_name": "Lyon",
+            "destination_country": "FR",
+            "departure_time": "08:00:00",
+            "arrival_time": "10:00:00",
+            "distance_km": "100",
+            "duration_h": "2",
+            "train_type": "TER",
+            "traction": "électrique",
+            "emission_gco2e_pkm": "12",
+            "total_emission_kgco2e": "45",
+            "frequency_per_week": "7",
+        })
+    
+    df = pd.DataFrame(rows)
+    df.to_csv(csv_path, index=False, encoding="utf-8")
+
+    with patch("load_script.staging.validate_row", return_value=(True, None)), patch(
+        "load_script.staging.sanitize_country_for_staging", side_effect=lambda v, *_: v
+    ):
+        hook = MagicMock()
+        out = load_staging_table(
+            hook=hook,
+            csv_path=csv_path,
+            load_id=10,
+            dataset_id=11,
+            origin_max_len=5,
+            dest_max_len=5,
+        )
+
+        assert out == 100
+
+
+def test_load_staging_table_route_parsing(tmp_path):
+    load_staging_table = _get_load_staging_table()
+    csv_path = tmp_path / "route_test.csv"
+    
+    df = pd.DataFrame([{
+        "trip_id": "t_route",
+        "route_name": "TGV - Paris Lyon Marseille",
+        "agency_name": "SNCF:National",
+        "service_type": "HV",
+        "origin_stop_name": "Paris",
+        "origin_country": "FR",
+        "destination_stop_name": "Marseille",
+        "destination_country": "FR",
+        "departure_time": "06:00:00",
+        "arrival_time": "14:00:00",
+        "distance_km": "750",
+        "duration_h": "8",
+        "train_type": "TGV",
+        "traction": "électrique",
+        "emission_gco2e_pkm": "10",
+        "total_emission_kgco2e": "40",
+        "frequency_per_week": "14",
+    }])
+    df.to_csv(csv_path, index=False, encoding="utf-8")
+
+    with patch("load_script.staging.validate_row", return_value=(True, None)), patch(
+        "load_script.staging.sanitize_country_for_staging", side_effect=lambda v, *_: v
+    ):
+        hook = MagicMock()
+        out = load_staging_table(
+            hook=hook,
+            csv_path=csv_path,
+            load_id=12,
+            dataset_id=13,
+            origin_max_len=5,
+            dest_max_len=5,
+        )
+
+        assert out == 1
+        flat_params = hook.run.call_args_list[1].kwargs["parameters"]
+        assert flat_params[4] == "TGV"
+        assert flat_params[6] == "SNCF"
