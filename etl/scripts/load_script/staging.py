@@ -11,7 +11,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-
 def load_staging_table(
     hook: MySqlHook,
     csv_path: Path,
@@ -95,7 +94,7 @@ def load_staging_table(
                         row.get("duration_h")) else None,
                     str(row.get("train_type", "")),
                     str(row.get("traction", "")),
-                    "",  # transport_type placeholder
+                    "",
                     float(row.get("emission_gco2e_pkm", 0)) if pd.notna(
                         row.get("emission_gco2e_pkm")) else None,
                     float(row.get("total_emission_kgco2e", 0)) if pd.notna(
@@ -140,44 +139,29 @@ def load_staging_table(
                 start_row = row_num - len(batch_values) + 1
                 end_row = row_num
                 logger.error(
-                    f"🔴 SQL INSERT FAILED at chunk {chunk_idx}, rows {start_row}-{end_row}")
-                logger.error(f"🔴 Error: {sql_error}")
-                logger.error(f"🔴 Batch size: {len(batch_values)} rows")
+                    f"SQL INSERT FAILED at chunk {chunk_idx}, rows {start_row}-{end_row}")
+                logger.error(f"Error: {sql_error}")
+                logger.error(f"Batch size: {len(batch_values)} rows")
 
                 try:
                     cols = [
-                        "load_id",
-                        "loaded_at",
-                        "dataset_id",
-                        "trip_id",
-                        "route_id",
-                        "route_name",
-                        "agency_id",
-                        "agency_name",
-                        "service_type",
-                        "origin_stop_name",
-                        "origin_country",
-                        "destination_stop_name",
-                        "destination_country",
-                        "departure_time",
-                        "arrival_time",
-                        "distance_km",
-                        "duration_h",
-                        "train_type",
-                        "traction",
-                        "transport_type",
-                        "emission_gco2e_pkm",
-                        "total_emission_kgco2e",
-                        "frequency_per_week"]
+                        "load_id", "loaded_at", "dataset_id", "trip_id", "route_id",
+                        "route_name", "agency_id", "agency_name", "service_type",
+                        "origin_stop_name", "origin_country", "destination_stop_name",
+                        "destination_country", "departure_time", "arrival_time",
+                        "distance_km", "duration_h", "train_type", "traction",
+                        "transport_type", "emission_gco2e_pkm", "total_emission_kgco2e",
+                        "frequency_per_week"
+                    ]
                     df = pd.DataFrame(batch_values, columns=cols)
                     dump_dir = Path("/opt/airflow/logs/staging_dumps")
                     dump_dir.mkdir(parents=True, exist_ok=True)
                     dump_path = dump_dir / \
                         f"stg_batch_fail_chunk{chunk_idx}_load{load_id}_rows{start_row}-{end_row}.csv"
                     df.to_csv(dump_path, index=False, encoding="utf-8")
-                    logger.error(f"  🔎 Batch dump saved: {dump_path}")
+                    logger.error(f"Batch dump saved: {dump_path}")
                 except Exception as dump_err:
-                    logger.error(f"  ⚠️ Could not dump batch CSV: {dump_err}")
+                    logger.error(f"Could not dump batch CSV: {dump_err}")
 
                 offenders = []
                 for dbg in batch_debug:
@@ -186,14 +170,14 @@ def load_staging_table(
                         offenders.append(dbg)
                 for dbg in offenders[:10]:
                     logger.error(
-                        f"  offender batch_idx={dbg['batch_index']} "
+                        f"offender batch_idx={dbg['batch_index']} "
                         f"csv_row={dbg['csv_row_num']} "
                         f"origin='{dbg['origin_country']}'(len={dbg['origin_len']}, max={origin_max_len}) "
                         f"dest='{dbg['destination_country']}'(len={dbg['dest_len']}, max={dest_max_len})"
                     )
 
                 for d in diagnostics[:20]:
-                    logger.error(f"  diag: {d}")
+                    logger.error(f"diag: {d}")
 
                 raise
 
@@ -204,179 +188,19 @@ def load_staging_table(
             loaded_count += len(batch_values)
             if chunk_idx % 10 == 0:
                 logger.info(
-                    f"  Chunk {chunk_idx}: +{len(batch_values)} rows (total {loaded_count})")
+                    f"Chunk {chunk_idx}: +{len(batch_values)} rows (total {loaded_count})")
                 for dbg in batch_debug:
                     logger.info(
                         f"[PRE-INSERT] chunk={chunk_idx} batch_idx={dbg['batch_index']} "
-                        f"csv_row={dbg['csv_row_num']} "
-                        f"trip={dbg['trip_id']} route={dbg['route_id']} "
+                        f"csv_row={dbg['csv_row_num']} trip={dbg['trip_id']} route={dbg['route_id']} "
                         f"origin='{dbg['origin_country']}'(len={dbg['origin_len']}) "
                         f"dest='{dbg['destination_country']}'(len={dbg['dest_len']})"
                     )
 
         logger.info(
-            f"✓ Loaded {loaded_count} rows into stg_trips_summary (processed {row_num} total rows)")
+            f"Loaded {loaded_count} rows into stg_trips_summary (processed {row_num} total rows)")
         return loaded_count
 
     except Exception as e:
-        logger.error(
-            f"Staging load failed at row {row_num}: {e}",
-            exc_info=True)
-        
-
-
-def test_load_staging_table_sql_insert_error_raises(tmp_path):
-    load_staging_table = _get_load_staging_table()
-    csv_path = tmp_path / "input.csv"
-    _write_csv(csv_path)
-
-    with patch("load_script.staging.validate_row", return_value=(True, None)), patch(
-        "load_script.staging.sanitize_country_for_staging", side_effect=lambda v, *_: v
-    ):
-        hook = MagicMock()
-        hook.run.side_effect = [None, Exception("SQL error")]
-
-        try:
-            load_staging_table(
-                hook=hook,
-                csv_path=csv_path,
-                load_id=5,
-                dataset_id=6,
-                origin_max_len=5,
-                dest_max_len=5,
-            )
-            assert False, "Should raise exception"
-        except Exception as e:
-            assert "SQL error" in str(e)
-
-
-def test_load_staging_table_country_too_long_logged(tmp_path):
-    load_staging_table = _get_load_staging_table()
-    csv_path = tmp_path / "input.csv"
-    
-    df = pd.DataFrame([{
-        "trip_id": "t2",
-        "route_name": "R2",
-        "agency_name": "A2",
-        "service_type": "Regional",
-        "origin_stop_name": "Paris",
-        "origin_country": "TOOLONG",
-        "destination_stop_name": "Lyon",
-        "destination_country": "FR",
-        "departure_time": "08:00:00",
-        "arrival_time": "10:00:00",
-        "distance_km": "100",
-        "duration_h": "2",
-        "train_type": "TER",
-        "traction": "diesel",
-        "emission_gco2e_pkm": "15",
-        "total_emission_kgco2e": "50",
-        "frequency_per_week": "5",
-    }])
-    df.to_csv(csv_path, index=False, encoding="utf-8")
-
-    with patch("load_script.staging.validate_row", return_value=(True, None)), patch(
-        "load_script.staging.sanitize_country_for_staging", side_effect=lambda v, *_: v
-    ):
-        hook = MagicMock()
-        with patch("load_script.staging.logger") as mock_logger:
-            out = load_staging_table(
-                hook=hook,
-                csv_path=csv_path,
-                load_id=7,
-                dataset_id=8,
-                origin_max_len=3,
-                dest_max_len=5,
-            )
-
-            assert out == 1
-            mock_logger.warning.assert_called()
-
-
-def test_load_staging_table_multiple_chunks(tmp_path):
-    load_staging_table = _get_load_staging_table()
-    csv_path = tmp_path / "large.csv"
-    
-    rows = []
-    for i in range(100):
-        rows.append({
-            "trip_id": f"t{i}",
-            "route_name": f"R{i} - Route",
-            "agency_name": f"A{i}:Agency",
-            "service_type": "Regional",
-            "origin_stop_name": "Paris",
-            "origin_country": "FR",
-            "destination_stop_name": "Lyon",
-            "destination_country": "FR",
-            "departure_time": "08:00:00",
-            "arrival_time": "10:00:00",
-            "distance_km": "100",
-            "duration_h": "2",
-            "train_type": "TER",
-            "traction": "électrique",
-            "emission_gco2e_pkm": "12",
-            "total_emission_kgco2e": "45",
-            "frequency_per_week": "7",
-        })
-    
-    df = pd.DataFrame(rows)
-    df.to_csv(csv_path, index=False, encoding="utf-8")
-
-    with patch("load_script.staging.validate_row", return_value=(True, None)), patch(
-        "load_script.staging.sanitize_country_for_staging", side_effect=lambda v, *_: v
-    ):
-        hook = MagicMock()
-        out = load_staging_table(
-            hook=hook,
-            csv_path=csv_path,
-            load_id=10,
-            dataset_id=11,
-            origin_max_len=5,
-            dest_max_len=5,
-        )
-
-        assert out == 100
-
-
-def test_load_staging_table_route_parsing(tmp_path):
-    load_staging_table = _get_load_staging_table()
-    csv_path = tmp_path / "route_test.csv"
-    
-    df = pd.DataFrame([{
-        "trip_id": "t_route",
-        "route_name": "TGV - Paris Lyon Marseille",
-        "agency_name": "SNCF:National",
-        "service_type": "HV",
-        "origin_stop_name": "Paris",
-        "origin_country": "FR",
-        "destination_stop_name": "Marseille",
-        "destination_country": "FR",
-        "departure_time": "06:00:00",
-        "arrival_time": "14:00:00",
-        "distance_km": "750",
-        "duration_h": "8",
-        "train_type": "TGV",
-        "traction": "électrique",
-        "emission_gco2e_pkm": "10",
-        "total_emission_kgco2e": "40",
-        "frequency_per_week": "14",
-    }])
-    df.to_csv(csv_path, index=False, encoding="utf-8")
-
-    with patch("load_script.staging.validate_row", return_value=(True, None)), patch(
-        "load_script.staging.sanitize_country_for_staging", side_effect=lambda v, *_: v
-    ):
-        hook = MagicMock()
-        out = load_staging_table(
-            hook=hook,
-            csv_path=csv_path,
-            load_id=12,
-            dataset_id=13,
-            origin_max_len=5,
-            dest_max_len=5,
-        )
-
-        assert out == 1
-        flat_params = hook.run.call_args_list[1].kwargs["parameters"]
-        assert flat_params[4] == "TGV"
-        assert flat_params[6] == "SNCF"
+        logger.error(f"Staging load failed at row {row_num}: {e}", exc_info=True)
+        raise

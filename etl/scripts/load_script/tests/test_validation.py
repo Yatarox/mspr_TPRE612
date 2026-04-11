@@ -52,7 +52,7 @@ def test_validate_row_distance_not_numeric():
         "route_name": "R1",
         "origin_stop_name": "Paris",
         "destination_stop_name": "Lyon",
-        "distance_km": "abc",  # provoque l'exception de conversion numérique
+        "distance_km": "abc",  
     }
     valid, msg = validate_row(row)
     assert not valid
