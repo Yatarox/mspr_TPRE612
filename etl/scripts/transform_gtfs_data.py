@@ -19,7 +19,7 @@ from transform_script.gtfs_geo import compute_distances, build_stop_country_map
 from transform_script.gtfs_processing import split_by_agency, _process_trips_chunk
 from transform_script.gtfs_time import compute_durations
 
-warnings.filterwarnings("ignore", category=pd.errors.SettingWithCopyWarning)
+warnings.filterwarnings("ignore", category=FutureWarning)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
