@@ -43,3 +43,17 @@ def test_validate_row_distance_out_of_range():
     valid, msg = validate_row(row)
     assert not valid
     assert "distance_km out of range" in msg
+
+
+def test_validate_row_distance_not_numeric():
+    row = {
+        "trip_id": "T1",
+        "agency_name": "SNCF",
+        "route_name": "R1",
+        "origin_stop_name": "Paris",
+        "destination_stop_name": "Lyon",
+        "distance_km": "abc",  # provoque l'exception de conversion numérique
+    }
+    valid, msg = validate_row(row)
+    assert not valid
+    assert msg == "distance_km not numeric"
