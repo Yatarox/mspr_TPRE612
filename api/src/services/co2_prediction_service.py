@@ -2,7 +2,6 @@
 import logging
 
 import joblib
-import numpy as np
 import pandas as pd
 from huggingface_hub import hf_hub_download
 
