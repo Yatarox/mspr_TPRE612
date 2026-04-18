@@ -90,6 +90,38 @@ services:
       timeout: 3s
       retries: 3
     restart: unless-stopped
+  
+  prometheus:
+    build: ./prometheus
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    restart: always
+    networks:
+      - monitoring
+
+  grafana:
+    build: ./grafana
+    container_name: grafana
+    ports:
+      - "4000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_UNIFIED_ALERTING_ENABLED=true
+      - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
+    restart: always
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - monitoring
 
 volumes:
   mysql-data:
@@ -99,3 +131,5 @@ networks:
   rail-network:
     driver: bridge
     name: rail-network
+  monitoring:
+    driver: bridge
