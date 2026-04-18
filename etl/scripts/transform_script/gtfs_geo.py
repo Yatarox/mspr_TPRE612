@@ -1,8 +1,10 @@
+import gc
 import logging
 
 import pandas as pd
 from typing import Dict, Optional
 import numpy as np
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -11,6 +13,7 @@ def build_stop_country_map(stops_df: pd.DataFrame) -> Dict[str, Optional[str]]:
     if stops_df.empty or "stop_lat" not in stops_df.columns or "stop_lon" not in stops_df.columns:
         logger.warning("No lat/lon in stops.txt, returning empty country map")
         return {}
+
     country_boxes = {
         "FR": (41.0, 51.5, -5.5, 10.0),
         "DE": (47.0, 55.5, 5.5, 15.5),
@@ -38,36 +41,52 @@ def build_stop_country_map(stops_df: pd.DataFrame) -> Dict[str, Optional[str]]:
         "DK": (54.5, 58.0, 8.0, 15.5),
         "FI": (59.5, 70.5, 19.0, 32.0),
     }
-    stop_country_map = {}
-    stops_clean = stops_df.copy()
+
+    # Garder uniquement les colonnes utiles
+    stops_clean = stops_df[["stop_id", "stop_lat", "stop_lon"]].copy()
     stops_clean["stop_lat"] = pd.to_numeric(stops_clean["stop_lat"], errors="coerce")
     stops_clean["stop_lon"] = pd.to_numeric(stops_clean["stop_lon"], errors="coerce")
-    stops_clean = stops_clean.dropna(subset=["stop_lat", "stop_lon", "stop_id"])
+    stops_clean = stops_clean.dropna(subset=["stop_lat", "stop_lon", "stop_id"]).reset_index(drop=True)
+
     logger.info(f"🌍 Building country map for {len(stops_clean)} stops with valid coordinates...")
-    for _, stop in stops_clean.iterrows():
-        stop_id = str(stop["stop_id"])
-        lat = float(stop["stop_lat"])
-        lon = float(stop["stop_lon"])
-        matches = []
-        for country, (lat_min, lat_max, lon_min, lon_max) in country_boxes.items():
-            if lat_min <= lat <= lat_max and lon_min <= lon <= lon_max:
-                matches.append(country)
-        if len(matches) == 1:
-            stop_country_map[stop_id] = matches[0]
-        elif len(matches) > 1:
-            stop_country_map[stop_id] = matches[0]
-            logger.debug(f"Stop {stop_id} at ({lat:.4f}, {lon:.4f}) in multiple countries {matches}, using {matches[0]}")
-        else:
-            stop_country_map[stop_id] = None
-            logger.debug(f"Stop {stop_id} at ({lat:.4f}, {lon:.4f}) outside known countries")
-    found_count = sum(1 for v in stop_country_map.values() if v is not None)
-    logger.info(f"✓ Country map built: {found_count}/{len(stops_clean)} stops mapped ({found_count/len(stops_clean)*100:.1f}%)")
-    country_counts = {}
-    for country in stop_country_map.values():
-        if country:
+
+    # Vectorisation complète : pas de iterrows
+    lats = stops_clean["stop_lat"].values
+    lons = stops_clean["stop_lon"].values
+    stop_ids = stops_clean["stop_id"].astype(str).values
+
+    # Tableau résultat initialisé à None
+    result_country = np.full(len(stops_clean), None, dtype=object)
+
+    for country, (lat_min, lat_max, lon_min, lon_max) in country_boxes.items():
+        # Applique le pays uniquement aux stops pas encore assignés
+        mask = (
+            (lats >= lat_min) & (lats <= lat_max) &
+            (lons >= lon_min) & (lons <= lon_max) &
+            (result_country == None)  # noqa: E711 — comparaison objet numpy nécessaire ici
+        )
+        result_country[mask] = country
+
+    stop_country_map = dict(zip(stop_ids, result_country))
+
+    found_count = int((result_country != None).sum())  # noqa: E711
+    total = len(stops_clean)
+    logger.info(
+        f"✓ Country map built: {found_count}/{total} stops mapped "
+        f"({found_count / total * 100:.1f}%)"
+    )
+
+    country_counts: Dict[str, int] = {}
+    for country in result_country:
+        if country is not None:
             country_counts[country] = country_counts.get(country, 0) + 1
-    logger.info(f"📊 Stops per country: {dict(sorted(country_counts.items(), key=lambda x: x[1], reverse=True)[:10])}")
+    logger.info(
+        f"📊 Stops per country: "
+        f"{dict(sorted(country_counts.items(), key=lambda x: x[1], reverse=True)[:10])}"
+    )
+
     return stop_country_map
+
 
 def extract_country_from_stop_name(stop_name: str) -> Optional[str]:
     stop_upper = stop_name.upper()
@@ -104,13 +123,14 @@ def haversine_km(lat1, lon1, lat2, lon2):
     lon2 = np.radians(lon2)
     dlat = lat2 - lat1
     dlon = lon2 - lon1
-    a = np.sin(dlat/2)**2 + np.cos(lat1)*np.cos(lat2)*np.sin(dlon/2)**2
+    a = np.sin(dlat / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2) ** 2
     return 2 * R * np.arcsin(np.sqrt(a))
 
 
-def compute_distances(stop_times: pd.DataFrame, stops: pd.DataFrame) -> pd.Series:
+def compute_distances(stop_times: pd.DataFrame, stops: pd.DataFrame, chunk_size: int = 10000) -> pd.Series:
     if stop_times.empty:
         return pd.Series(dtype=float)
+
     st = stop_times[["trip_id", "stop_id", "stop_sequence"]].copy()
 
     if "shape_dist_traveled" in stop_times.columns:
@@ -118,11 +138,12 @@ def compute_distances(stop_times: pd.DataFrame, stops: pd.DataFrame) -> pd.Serie
         st = st.sort_values(["trip_id", "stop_sequence"])
         if st["shape_dist_traveled"].notna().any():
             g = st.groupby("trip_id")["shape_dist_traveled"]
-            raw = (g.max() - g.min())
+            raw = g.max() - g.min()
             raw = raw.where(raw <= 1000, raw / 1000.0)
             return raw.fillna(0).round(3)
 
     st = st.sort_values(["trip_id", "stop_sequence"])
+
     if "stop_lat" not in stops.columns or "stop_lon" not in stops.columns:
         logger.warning("stop_lat ou stop_lon not found in stops.txt, returning 0 distances")
         return pd.Series(dtype=float)
@@ -133,20 +154,38 @@ def compute_distances(stop_times: pd.DataFrame, stops: pd.DataFrame) -> pd.Serie
     stops_idx = stops_idx.set_index("stop_id")
 
     st = st.join(stops_idx, on="stop_id", how="left")
-    st.loc[:, "lat_prev"] = st.groupby("trip_id")["stop_lat"].shift(1)
-    st.loc[:, "lon_prev"] = st.groupby("trip_id")["stop_lon"].shift(1)
+    st["lat_prev"] = st.groupby("trip_id")["stop_lat"].shift(1)
+    st["lon_prev"] = st.groupby("trip_id")["stop_lon"].shift(1)
 
-    seg = st.dropna(subset=["lat_prev", "lon_prev", "stop_lat", "stop_lon"])
+    # Libérer la copie intermédiaire avant de créer seg
+    seg = st.dropna(subset=["lat_prev", "lon_prev", "stop_lat", "stop_lon"]).copy()
+    del st
+    gc.collect()
+
     if seg.empty:
         logger.warning("No valid segments for distance calculation")
         return pd.Series(dtype=float)
 
-    seg = seg.copy()
-    seg["seg_km"] = haversine_km(
-        seg["lat_prev"].astype(float),
-        seg["lon_prev"].astype(float),
-        seg["stop_lat"].astype(float),
-        seg["stop_lon"].astype(float),
-    )
-    result = seg.groupby("trip_id")["seg_km"].sum().round(3)
-    return result.fillna(0)
+    trip_ids = seg["trip_id"].unique()
+    results = []
+    for i in range(0, len(trip_ids), chunk_size):
+        chunk_trip_ids = trip_ids[i:i + chunk_size]
+        chunk = seg[seg["trip_id"].isin(chunk_trip_ids)].copy()
+        chunk["seg_km"] = haversine_km(
+            chunk["lat_prev"].astype(float),
+            chunk["lon_prev"].astype(float),
+            chunk["stop_lat"].astype(float),
+            chunk["stop_lon"].astype(float),
+        )
+        result = chunk.groupby("trip_id")["seg_km"].sum().round(3)
+        results.append(result)
+        del chunk, result
+        gc.collect()
+
+    del seg
+    gc.collect()
+
+    if results:
+        return pd.concat(results).fillna(0)
+    else:
+        return pd.Series(dtype=float)

@@ -120,9 +120,9 @@ def gtfs_full_etl():
         "https://www.data.gouv.fr/api/1/datasets/r/eae0fa46-087a-4018-ada9-d8add124e635",
         "https://www.data.gouv.fr/api/1/datasets/r/9ae758ec-cd7a-40cd-a890-bb3963224942",
         "https://gtfs.irail.be/nmbs/gtfs/latest.zip",
-        "https://data.opentransportdata.swiss/en/dataset/timetable-2025-gtfs2020/permalink",
+        "https://data.opentransportdata.swiss/dataset/timetable-2026-gtfs2020/permalink",
         "https://www.nvbw.de/fileadmin/user_upload/service/open_data/fahrplandaten_mit_liniennetz/ding.zip",
-        " https://dati.toscana.it/dataset/8bb8f8fe-fe7d-41d0-90dc-49f2456180d1/resource/ae4594d4-d395-4651-a097-446e878e9005/download/90-lineeregionali.gtfs",
+        "https://dati.toscana.it/dataset/8bb8f8fe-fe7d-41d0-90dc-49f2456180d1/resource/ae4594d4-d395-4651-a097-446e878e9005/download/90-lineeregionali.gtfs",
         "https://www.data.gouv.fr/api/1/datasets/r/bfd97acd-63f3-4ea4-bfe8-70e4c7fd8d13",
         "https://api.transtejo.pt/files/GTFS.zip",
         "https://www.data.gouv.fr/api/1/datasets/r/c0bd9ff1-97f9-43f8-aca4-8e80d7728324"
