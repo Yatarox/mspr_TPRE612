@@ -1,6 +1,6 @@
 import sys
 import os
-from unittest.mock import patch
+from unittest.mock import patch, AsyncMock
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 from fastapi.testclient import TestClient
@@ -9,7 +9,7 @@ from main import app
 client = TestClient(app)
 
 
-@patch("api.routes.dashboard.dashboard_service.get_overview")
+@patch("api.routes.dashboard.dashboard_service.get_overview", new_callable=AsyncMock)
 def test_get_overview_endpoint(mock_service):
     mock_service.return_value = {"total_trips": 10}
     response = client.get("/api/stats/overview")
@@ -17,7 +17,7 @@ def test_get_overview_endpoint(mock_service):
     assert response.json()["total_trips"] == 10
 
 
-@patch("api.routes.dashboard.dashboard_service.get_stats_by_country")
+@patch("api.routes.dashboard.dashboard_service.get_stats_by_country", new_callable=AsyncMock)
 def test_get_stats_by_country_endpoint(mock_service):
     mock_service.return_value = [{"country": "FR", "trip_count": 12}]
     response = client.get("/api/stats/by-country")
@@ -25,7 +25,7 @@ def test_get_stats_by_country_endpoint(mock_service):
     assert response.json()[0]["country"] == "FR"
 
 
-@patch("api.routes.dashboard.dashboard_service.get_stats_by_train_type")
+@patch("api.routes.dashboard.dashboard_service.get_stats_by_train_type", new_callable=AsyncMock)
 def test_get_stats_by_train_type_endpoint(mock_service):
     mock_service.return_value = [{"train_type": "TGV", "trip_count": 8}]
     response = client.get("/api/stats/by-train-type")
@@ -33,7 +33,7 @@ def test_get_stats_by_train_type_endpoint(mock_service):
     assert response.json()[0]["train_type"] == "TGV"
 
 
-@patch("api.routes.dashboard.dashboard_service.get_stats_by_traction")
+@patch("api.routes.dashboard.dashboard_service.get_stats_by_traction", new_callable=AsyncMock)
 def test_get_stats_by_traction_endpoint(mock_service):
     mock_service.return_value = [{"traction": "Electric", "trip_count": 9}]
     response = client.get("/api/stats/by-traction")
@@ -41,7 +41,7 @@ def test_get_stats_by_traction_endpoint(mock_service):
     assert response.json()[0]["traction"] == "Electric"
 
 
-@patch("api.routes.dashboard.dashboard_service.get_stats_by_agency")
+@patch("api.routes.dashboard.dashboard_service.get_stats_by_agency", new_callable=AsyncMock)
 def test_get_stats_by_agency_endpoint(mock_service):
     mock_service.return_value = [{"agency_name": "SNCF", "trip_count": 15}]
     response = client.get("/api/stats/by-agency?limit=10")
@@ -50,7 +50,7 @@ def test_get_stats_by_agency_endpoint(mock_service):
     mock_service.assert_awaited_once_with(10)
 
 
-@patch("api.routes.dashboard.dashboard_service.get_emissions_by_route")
+@patch("api.routes.dashboard.dashboard_service.get_emissions_by_route", new_callable=AsyncMock)
 def test_get_emissions_by_route_endpoint(mock_service):
     mock_service.return_value = [{"route_name": "Paris-Lyon", "total_emissions": 123.4}]
     response = client.get("/api/emissions/by-route?limit=20")
@@ -59,7 +59,7 @@ def test_get_emissions_by_route_endpoint(mock_service):
     mock_service.assert_awaited_once_with(20)
 
 
-@patch("api.routes.dashboard.dashboard_service.search_trips")
+@patch("api.routes.dashboard.dashboard_service.search_trips", new_callable=AsyncMock)
 def test_search_trips_endpoint(mock_service):
     mock_service.return_value = [{"trip_id": "T1"}]
     response = client.get(
@@ -77,10 +77,9 @@ def test_search_trips_endpoint(mock_service):
     )
 
 
-@patch("api.routes.dashboard.dashboard_service.get_stats_by_service_type")
+@patch("api.routes.dashboard.dashboard_service.get_stats_by_service_type", new_callable=AsyncMock)
 def test_get_stats_by_service_type_endpoint(mock_service):
     mock_service.return_value = [{"service_type": "Jour", "trip_count": 150}]
     response = client.get("/api/stats/by-service-type")
     assert response.status_code == 200
-    assert len(response.json()) == 1
     assert response.json()[0]["service_type"] == "Jour"

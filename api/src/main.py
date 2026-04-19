@@ -4,16 +4,16 @@ from contextlib import asynccontextmanager
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 
 from api.routes.dashboard import router as dashboard_router
-from api.routes.co2_prediction import router as co2_router
+from api.routes.model_prediction import router as co2_router
 from models.database import init_db_pool, close_db_pool
 from middleware.prometheus import PrometheusMiddleware
-from services.co2_prediction_service import load_model
+from services.model_service import load_model
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db_pool()
-    load_model()
+    load_model()  # chargement du modèle en RAM au démarrage
     yield
     await close_db_pool()
 
@@ -25,7 +25,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-
 app.add_middleware(PrometheusMiddleware)
 
 app.add_middleware(
@@ -36,10 +35,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 app.include_router(dashboard_router, prefix="/api", tags=["dashboard"])
 app.include_router(co2_router, prefix="/api", tags=["predict"])
-
 
 
 @app.get("/")

@@ -31,11 +31,8 @@ services:
     environment:
       - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=False
       - AIRFLOW_CONN_MYSQL_DEFAULT=mysql://root:root@mysql:3306/rail_dw
-
-      # ← Fix Airflow 3 SimpleAuthManager
       - AIRFLOW__SIMPLE_AUTH_MANAGER__USERS=admin:admin
       - AIRFLOW__SIMPLE_AUTH_MANAGER__PASSWORDS=admin:admin123
-
     deploy:
       resources:
         limits:
@@ -48,7 +45,8 @@ services:
     networks:
       - rail-network
     restart: unless-stopped
-
+    volumes:
+      - model-data:/opt/airflow/models
   api:
     build: ./api
     container_name: rail-api
@@ -72,6 +70,8 @@ services:
       retries: 3
       start_period: 40s
     restart: unless-stopped
+    volumes:
+      - model-data:/app/models           # <--- Volume partagé pour le modèle
 
   dashboard:
     build: ./rail-dashboard
@@ -90,7 +90,7 @@ services:
       timeout: 3s
       retries: 3
     restart: unless-stopped
-  
+
   prometheus:
     build: ./prometheus
     container_name: prometheus
@@ -125,6 +125,8 @@ services:
 
 volumes:
   mysql-data:
+    driver: local
+  model-data:         
     driver: local
 
 networks:

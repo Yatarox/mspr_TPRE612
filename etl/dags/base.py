@@ -7,6 +7,7 @@ from typing import List, Dict, Any
 import pendulum
 from airflow.sdk import dag, task, get_current_context
 from airflow.models import Variable
+from airflow.models.xcom_arg import XComArg
 
 sys.path.append("/opt/airflow")
 
@@ -18,7 +19,7 @@ from scripts.extract_gtfs_data_gouv_script import (  # noqa: E402
 )
 from scripts.load_gtfs import load_gtfs  # noqa: E402
 from scripts.transform_gtfs_data import transform_gtfs  # noqa: E402
-
+from scripts.train_model import train_model_pipeline  # noqa: E402
 logger = logging.getLogger(__name__)
 
 
@@ -58,6 +59,16 @@ class StructuredLogger:
 
 
 structured_logger = StructuredLogger(logger)
+
+
+def clean_xcom(obj):
+    if isinstance(obj, dict):
+        return {k: clean_xcom(v) for k, v in obj.items() if not isinstance(v, XComArg)}
+    elif isinstance(obj, list):
+        return [clean_xcom(v) for v in obj if not isinstance(v, XComArg)]
+    elif isinstance(obj, XComArg):
+        return str(obj)
+    return obj
 
 
 def _parse_urls(value: str) -> List[str]:
@@ -105,26 +116,26 @@ default_args = {
 )
 def gtfs_full_etl():
     default_urls = [
-        "https://transport.data.gouv.fr/api/datasets/563dd039b5950814b0588710",
-        "https://transport.data.gouv.fr/api/datasets/685baf2be31192d0ec7bcdc9",
-        "https://transport.data.gouv.fr/api/datasets/63c02bbf4059d43863de0c81",
-        "https://transport.data.gouv.fr/api/datasets/64635525318cc75a9a8a771f",
-        "https://transport.data.gouv.fr/api/datasets/6449c52caeceb71273a42dd3",
-        "https://transport.data.gouv.fr/api/datasets/68afa029133777b3ecd6bb8b",
-        "https://transport.data.gouv.fr/api/datasets/65af92d12d38ceffacb04812",
+        # "https://transport.data.gouv.fr/api/datasets/563dd039b5950814b0588710",
+        # "https://transport.data.gouv.fr/api/datasets/685baf2be31192d0ec7bcdc9",
+        # "https://transport.data.gouv.fr/api/datasets/63c02bbf4059d43863de0c81",
+        # "https://transport.data.gouv.fr/api/datasets/64635525318cc75a9a8a771f",
+        # "https://transport.data.gouv.fr/api/datasets/6449c52caeceb71273a42dd3",
+        # "https://transport.data.gouv.fr/api/datasets/68afa029133777b3ecd6bb8b",
+        # "https://transport.data.gouv.fr/api/datasets/65af92d12d38ceffacb04812",
         "https://transport.data.gouv.fr/api/datasets/63bc5f36f25deab1e855c0ff",
     ]
 
     default_zip_urls = [
-        "https://www.data.gouv.fr/api/1/datasets/r/b2dfbaa3-47e9-4749-b6a4-750bebd760e7",
-        "https://www.data.gouv.fr/api/1/datasets/r/eae0fa46-087a-4018-ada9-d8add124e635",
-        "https://www.data.gouv.fr/api/1/datasets/r/9ae758ec-cd7a-40cd-a890-bb3963224942",
-        "https://gtfs.irail.be/nmbs/gtfs/latest.zip",
-        "https://data.opentransportdata.swiss/dataset/timetable-2026-gtfs2020/permalink",
-        "https://www.nvbw.de/fileadmin/user_upload/service/open_data/fahrplandaten_mit_liniennetz/ding.zip",
-        "https://dati.toscana.it/dataset/8bb8f8fe-fe7d-41d0-90dc-49f2456180d1/resource/ae4594d4-d395-4651-a097-446e878e9005/download/90-lineeregionali.gtfs",
-        "https://www.data.gouv.fr/api/1/datasets/r/bfd97acd-63f3-4ea4-bfe8-70e4c7fd8d13",
-        "https://api.transtejo.pt/files/GTFS.zip",
+        # "https://www.data.gouv.fr/api/1/datasets/r/b2dfbaa3-47e9-4749-b6a4-750bebd760e7",
+        # "https://www.data.gouv.fr/api/1/datasets/r/eae0fa46-087a-4018-ada9-d8add124e635",
+        # "https://www.data.gouv.fr/api/1/datasets/r/9ae758ec-cd7a-40cd-a890-bb3963224942",
+        # "https://gtfs.irail.be/nmbs/gtfs/latest.zip",
+        # "https://data.opentransportdata.swiss/dataset/timetable-2026-gtfs2020/permalink",
+        # "https://www.nvbw.de/fileadmin/user_upload/service/open_data/fahrplandaten_mit_liniennetz/ding.zip",
+        # "https://dati.toscana.it/dataset/8bb8f8fe-fe7d-41d0-90dc-49f2456180d1/resource/ae4594d4-d395-4651-a097-446e878e9005/download/90-lineeregionali.gtfs",
+        # "https://www.data.gouv.fr/api/1/datasets/r/bfd97acd-63f3-4ea4-bfe8-70e4c7fd8d13",
+        # "https://api.transtejo.pt/files/GTFS.zip",
         "https://www.data.gouv.fr/api/1/datasets/r/c0bd9ff1-97f9-43f8-aca4-8e80d7728324"
     ]
 
@@ -326,6 +337,64 @@ def gtfs_full_etl():
         logger.info(f"   Files Transformed: {transform_stats.get('files_generated', 0)}")
         logger.info(f"   Rows Loaded: {load_stats.get('rows_loaded', 0)}")
         return summary
+    
+        
+    @task 
+    def train_model(load_stats: Dict[str, Any]) -> Dict[str, Any]:
+        context = get_current_context()
+        start_time = datetime.now()
+
+        try:
+            structured_logger.log_event(
+                "train_model_started",
+                task_id=context["task_instance"].task_id,
+                load_stats=clean_xcom(load_stats),
+            )
+
+            result = train_model_pipeline()
+            result = clean_xcom(result)
+            model_metrics = model_summary(result)
+            model_metrics = clean_xcom(model_metrics)
+
+            duration = (datetime.now() - start_time).total_seconds()
+            stats = {
+                "model_result": result,
+                "model_metrics": model_metrics,
+                "duration_seconds": duration,
+                "success": True,
+            }
+            stats = clean_xcom(stats)
+            structured_logger.log_metric("train_model_duration", duration, **stats)
+            structured_logger.log_event("train_model_completed", **stats)
+            logger.info(f"✓ TRAIN MODEL completed - Duration: {duration:.2f}s")
+            return stats
+
+        except Exception as exc:
+            duration = (datetime.now() - start_time).total_seconds()
+            structured_logger.log_error("train_model_failed", str(exc), duration_seconds=duration)
+            logger.error(f"✗ TRAIN MODEL failed after {duration:.2f}s: {exc}")
+            raise
+
+    @task
+    def model_summary(model_result: dict) -> dict:
+        summary = {
+            "model": model_result.get("name", "unknown"),
+            "r2": model_result.get("r2"),
+            "mae": model_result.get("mae"),
+            "mae_pct": model_result.get("mae_pct"),
+            "success": model_result.get("r2", None) is not None,
+        }
+
+        logger.info("📊 MODEL SUMMARY:")
+        logger.info(f"   Modèle : {summary['model']}")
+        logger.info(f"   R²     : {summary['r2']}")
+        logger.info(f"   MAE    : {summary['mae']}")
+        logger.info(f"   MAE %  : {summary['mae_pct']}")
+        logger.info(f"   Success: {summary['success']}")
+
+        structured_logger.log_event("model_summary", **summary)
+        return summary
+
 
     @task
     def final_cleanup():
@@ -335,9 +404,11 @@ def gtfs_full_etl():
     extract_result = extract()
     transform_result = transform(extract_result)
     load_result = load(transform_result)
+    train_model_result = train_model(load_result)
+    model_summary_result = model_summary(train_model_result)
     summary = pipeline_summary(extract_result, transform_result, load_result)
 
-    extract_result >> transform_result >> load_result >> summary >> final_cleanup()
+    extract_result >> transform_result >> load_result >>  summary>> train_model_result >> model_summary_result >> final_cleanup()
 
 
 dag_instance = gtfs_full_etl()
