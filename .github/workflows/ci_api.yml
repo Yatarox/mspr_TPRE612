@@ -1,4 +1,4 @@
-name: CI - Airflow Build & Quality
+name: CI - API Build & Quality
 
 on:
   push:
@@ -26,7 +26,29 @@ jobs:
         run: pip install ruff
 
       - name: 🧹 Lint code with ruff
-        run: ruff check ./etl/scripts
+        run: ruff check ./api/src
+
+
+  audit:
+    name: 🔒 Security Audit
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: 🛎️ Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: 🐍 Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: 📦 Install pip-audit
+        run: pip install pip-audit
+
+      - name: 🔒 Check dependencies for vulnerabilities
+        run: pip-audit -r ./api/requirements.txt
 
 
   test:
@@ -46,30 +68,29 @@ jobs:
 
       - name: 📦 Install dependencies
         run: |
-          pip install -r ./etl/requirements.txt
-          pip install pandas pytest pytest-cov
+          pip install -r ./api/requirements.txt
+          pip install pytest pytest-cov
 
       - name: 🧪 Run unit tests with coverage
         run: |
-          export PYTHONPATH=$PYTHONPATH:./etl/scripts
-          pytest --cov=etl/scripts --cov-report=xml:etl/coverage.xml etl/scripts/
+          pytest --cov=api/src --cov-config=.coveragerc --cov-report=xml:api/coverage.xml api/tests
 
       - name: 📤 Upload coverage report
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-report-airflow
-          path: etl/coverage.xml
+          name: coverage-report-api
+          path: api/coverage.xml
 
 
   docker:
     name: 🐳 Docker Build
     runs-on: ubuntu-latest
-    needs: test
+    needs: [audit, test]
     steps:
       - name: 🛎️ Checkout repository
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
-      - name: 🐳 Build Airflow Docker image
-        run: docker build -t mspr-airflow ./etl
+      - name: 🐳 Build Docker image
+        run: docker build -t mspr-api ./api
