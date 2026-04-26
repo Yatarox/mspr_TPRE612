@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Query
-from typing import Optional
 from services import model_service
 
 router = APIRouter()

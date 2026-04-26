@@ -12,7 +12,6 @@ from middleware.prometheus import (
 MODEL_PATH = "/app/models/frequency_model.joblib"
 ADEME_GCO2E_PKM = 1.7
 
-# Cache RAM : chargé une seule fois
 _model = None
 _model_name = None
 _last_check = 0
@@ -43,7 +42,6 @@ def load_model():
 
 
 def get_model():
-    """Retourne le modèle depuis le cache RAM, le charge si nécessaire."""
     global _model, _model_name
     if _model is None:
         load_model()
@@ -92,6 +90,7 @@ def predict_co2(distance_km, duration_h, nb_stops, train_type, traction):
         PREDICTION_VALUE.observe(emission_gco2e_pkm)
 
         return {
+            "frequency_per_week": freq,
             "emission_gco2e_pkm": emission_gco2e_pkm,
             "total_emission_kgco2e": total_emission_kgco2e,
             "model": name,

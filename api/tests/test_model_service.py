@@ -2,7 +2,7 @@ import os
 import sys
 import pytest
 import numpy as np
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
