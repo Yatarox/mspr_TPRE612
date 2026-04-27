@@ -1,0 +1,58 @@
+{
+  "title": "API CO2 - Monitoring",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Total Requêtes HTTP",
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [{ "expr": "sum(http_requests_total)", "legendFormat": "Total", "refId": "A" }],
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 }
+    },
+    {
+      "type": "graph",
+      "title": "Latence des requêtes HTTP",
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [{ "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, method, endpoint))", "legendFormat": "{{method}} {{endpoint}} (p95)", "refId": "A" }],
+      "gridPos": { "x": 6, "y": 0, "w": 12, "h": 8 }
+    },
+    {
+      "type": "stat",
+      "title": "Requêtes HTTP en cours",
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [{ "expr": "sum(http_requests_in_progress)", "legendFormat": "En cours", "refId": "A" }],
+      "gridPos": { "x": 0, "y": 4, "w": 6, "h": 4 }
+    },
+    {
+      "type": "stat",
+      "title": "Prédictions CO2 (succès)",
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [{ "expr": "sum(co2_predictions_total{status=\"success\"})", "legendFormat": "Succès", "refId": "A" }],
+      "gridPos": { "x": 0, "y": 8, "w": 6, "h": 4 }
+    },
+    {
+      "type": "stat",
+      "title": "Prédictions CO2 (erreurs)",
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [{ "expr": "sum(co2_predictions_total{status=\"error\"})", "legendFormat": "Erreur", "refId": "A" }],
+      "gridPos": { "x": 6, "y": 8, "w": 6, "h": 4 }
+    },
+    {
+      "type": "graph",
+      "title": "Distribution des valeurs prédites (gCO2e/km)",
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [{ "expr": "histogram_quantile(0.95, sum(rate(co2_prediction_value_gco2e_pkm_bucket[5m])) by (le))", "legendFormat": "p95", "refId": "A" }],
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 }
+    },
+    {
+      "type": "graph",
+      "title": "Latence des prédictions CO2",
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [{ "expr": "histogram_quantile(0.95, sum(rate(co2_prediction_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p95", "refId": "A" }],
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 }
+    }
+  ],
+  "schemaVersion": 36,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-6h", "to": "now" }
+}

@@ -31,11 +31,8 @@ services:
     environment:
       - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=False
       - AIRFLOW_CONN_MYSQL_DEFAULT=mysql://root:root@mysql:3306/rail_dw
-
-      # ← Fix Airflow 3 SimpleAuthManager
       - AIRFLOW__SIMPLE_AUTH_MANAGER__USERS=admin:admin
       - AIRFLOW__SIMPLE_AUTH_MANAGER__PASSWORDS=admin:admin123
-
     deploy:
       resources:
         limits:
@@ -48,7 +45,8 @@ services:
     networks:
       - rail-network
     restart: unless-stopped
-
+    volumes:
+      - model-data:/opt/airflow/models
   api:
     build: ./api
     container_name: rail-api
@@ -72,6 +70,8 @@ services:
       retries: 3
       start_period: 40s
     restart: unless-stopped
+    volumes:
+      - model-data:/app/models           # <--- Volume partagé pour le modèle
 
   dashboard:
     build: ./rail-dashboard
@@ -91,11 +91,47 @@ services:
       retries: 3
     restart: unless-stopped
 
+  prometheus:
+    build: ./prometheus
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    restart: always
+    networks:
+      - monitoring
+
+  grafana:
+    build: ./grafana
+    container_name: grafana
+    ports:
+      - "4000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_UNIFIED_ALERTING_ENABLED=true
+      - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
+    restart: always
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - monitoring
+
 volumes:
   mysql-data:
+    driver: local
+  model-data:         
     driver: local
 
 networks:
   rail-network:
     driver: bridge
     name: rail-network
+  monitoring:
+    driver: bridge
