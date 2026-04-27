@@ -85,8 +85,8 @@ def test_download_and_extract_gtfs_full_pipeline(tmp_path):
 
     zip_path = tmp_path / "src" / "data.zip"
     zip_path.parent.mkdir()
-    #file_hash = _make_gtfs_zip(str(zip_path))
-
+    file_hash = _make_gtfs_zip(str(zip_path))
+    print(f"Created zip with hash: {file_hash if file_hash else 'ERROR'} at {zip_path}")
     download_dir = tmp_path / "downloads"
     extract_dir = tmp_path / "extracted"
 
@@ -132,11 +132,14 @@ def test_download_and_extract_gtfs_full_pipeline(tmp_path):
 def test_download_and_extract_gtfs_skip_on_second_run(tmp_path):
     from unittest.mock import patch
 
-    #zip_bytes = b""
+    zip_bytes = b""
+    print(f"Creating in-memory zip with stops.txt {zip_bytes}")
     with zipfile.ZipFile(__import__("io").BytesIO(), "w") as zf:
         zf.writestr("stops.txt", "id,name\n")
-        #zip_bytes = __import__("io").BytesIO()
-        # zf2 = zipfile.ZipFile(zip_bytes, "w")
+        zip_bytes = __import__("io").BytesIO()
+        print(f"Created in-memory zip with stops.txt {zip_bytes.getvalue()}")
+        zf2 = zipfile.ZipFile(zip_bytes, "w")
+        print(f'Created zf2: {zf2 if zf2 else "ERROR"}')
 
     extract_dir = tmp_path / "extracted"
     dataset_extract = extract_dir / "data"
