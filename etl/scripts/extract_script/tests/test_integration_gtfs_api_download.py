@@ -2,14 +2,13 @@
 import os
 import sys
 import zipfile
-import tempfile
 from unittest.mock import patch, Mock
 
 sys.path.append(
     os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 )
 
-from scripts.extract_script.gtfs_api import build_download_list, get_latest_gtfs_from_api
+from scripts.extract_script.gtfs_api import build_download_list
 from scripts.extract_script.gtfs_download import download_and_extract_gtfs
 
 
@@ -38,7 +37,7 @@ def _make_zip_bytes(files=None):
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         for f in files:
-            zf.writestr(f, f"id,name\n1,Test\n")
+            zf.writestr(f, "id,name\n1,Test\n")
     return buf.getvalue()
 
 
