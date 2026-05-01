@@ -60,10 +60,6 @@ def trips_tgv():
 class TestGeoProcessingIntegration:
 
     def test_country_map_used_in_process_chunk(self, stops_paris_lyon, stop_times_paris_lyon, trips_tgv):
-        """
-        build_stop_country_map produit une map → _process_trips_chunk l'utilise
-        pour assigner les pays sans appeler extract_country_from_stop_name.
-        """
         stop_country_map = build_stop_country_map(stops_paris_lyon)
         distances_km = compute_distances(stop_times_paris_lyon, stops_paris_lyon)
         durations_min = compute_durations(stop_times_paris_lyon)
@@ -104,7 +100,7 @@ class TestGeoProcessingIntegration:
             trips_chunk=trips_tgv,
             first=first, last=last,
             stops_name={"A": "Paris Gare de Lyon", "B": "Lyon Part-Dieu"},
-            stop_country_map={},  # vide → fallback sur stop_name
+            stop_country_map={},  
             distances_km=distances_km,
             durations_min=durations_min,
             dataset_id_meta="ds-test",
@@ -141,5 +137,69 @@ class TestGeoProcessingIntegration:
 
         expected_dist = float(distances_km["T1"])
         assert all_rows[0]["distance_km"] == round(expected_dist, 3)
-        assert all_rows[0]["distance_km"] > 300  # Paris-Lyon ~390 km
+        assert all_rows[0]["distance_km"] > 300 
+
+# ── gtfs_time ↔ gtfs_processing ──────────────────────────────────────────────
+
+class TestTimeProcessingIntegration:
+
+    def test_duration_computed_by_time_is_used_in_row(self, stops_paris_lyon, stop_times_paris_lyon, trips_tgv):
+        stop_country_map = build_stop_country_map(stops_paris_lyon)
+        distances_km = compute_distances(stop_times_paris_lyon, stops_paris_lyon)
+        durations_min = compute_durations(stop_times_paris_lyon)
+
+        first = stop_times_paris_lyon.iloc[[0]].set_index("trip_id")
+        last  = stop_times_paris_lyon.iloc[[1]].set_index("trip_id")
+        freq_map = build_frequency_map(trips_tgv, first, last)
+        all_rows = []
+
+        _process_trips_chunk(
+            trips_chunk=trips_tgv,
+            first=first, last=last,
+            stops_name={"A": "Paris Gare de Lyon", "B": "Lyon Part-Dieu"},
+            stop_country_map=stop_country_map,
+            distances_km=distances_km,
+            durations_min=durations_min,
+            dataset_id_meta="ds-test",
+            processed_dir="/tmp",
+            freq_map=freq_map,
+            all_rows=all_rows,
+        )
+
+        expected_h = round(float(durations_min["T1"]) / 60.0, 2)
+        assert all_rows[0]["duration_h"] == expected_h
+
+    def test_classifier_train_called_with_real_departure_time(self, stops_paris_lyon, trips_tgv):
+        night_stop_times = pd.DataFrame({
+            "trip_id": ["T1", "T1"],
+            "stop_id": ["A", "B"],
+            "stop_sequence": [1, 2],
+            "arrival_time":   ["23:00:00", "05:00:00"],
+            "departure_time": ["23:10:00", "05:05:00"],
+        })
+
+        stop_country_map = build_stop_country_map(stops_paris_lyon)
+        distances_km = compute_distances(night_stop_times, stops_paris_lyon)
+        durations_min = compute_durations(night_stop_times)
+
+        first = night_stop_times.iloc[[0]].set_index("trip_id")
+        last  = night_stop_times.iloc[[1]].set_index("trip_id")
+        freq_map = build_frequency_map(trips_tgv, first, last)
+        all_rows = []
+
+        _process_trips_chunk(
+            trips_chunk=trips_tgv,
+            first=first, last=last,
+            stops_name={"A": "Paris Gare de Lyon", "B": "Lyon Part-Dieu"},
+            stop_country_map=stop_country_map,
+            distances_km=distances_km,
+            durations_min=durations_min,
+            dataset_id_meta="ds-test",
+            processed_dir="/tmp",
+            freq_map=freq_map,
+            all_rows=all_rows,
+        )
+
+        assert all_rows[0]["service_type"] == "NUIT"
+        assert all_rows[0]["departure_time"] == "23:10:00"
 
