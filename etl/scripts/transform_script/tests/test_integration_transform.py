@@ -428,3 +428,152 @@ class TestHelpersProcessingIntegration:
         assert read_back["dataset_id"] == "ds-sncf"
         assert read_back["file_hash"] == "abc123"
 
+# ── Pipeline complet multi-trips ──────────────────────────────────────────────
+
+class TestFullPipelineMultiTrips:
+
+    def test_multi_trip_different_services(self, stops_paris_lyon):
+        stop_times = pd.DataFrame({
+            "trip_id":       ["T1","T1","T2","T2"],
+            "stop_id":       ["A","B","A","B"],
+            "stop_sequence": [1, 2, 1, 2],
+            "arrival_time":  ["09:50:00","12:00:00","22:50:00","02:00:00"],
+            "departure_time":["09:55:00","12:05:00","23:00:00","02:05:00"],
+        })
+        trips = pd.DataFrame({
+            "trip_id": ["T1","T2"],
+            "route_id": ["R1","R1"],
+            "service_id": ["S1","S1"],
+            "agency_name": ["SNCF","SNCF"],
+            "route_type": ["101","101"],
+            "route_short_name": ["TGV","TGV"],
+            "route_long_name":  ["Paris-Lyon","Paris-Lyon"],
+            "monday": ["1","1"],"tuesday": ["1","1"],"wednesday": ["1","1"],
+            "thursday": ["1","1"],"friday": ["1","1"],"saturday": ["0","0"],"sunday": ["0","0"],
+        })
+
+        stop_country_map = build_stop_country_map(stops_paris_lyon)
+        distances_km = compute_distances(stop_times, stops_paris_lyon)
+        durations_min = compute_durations(stop_times)
+        first = stop_times.groupby("trip_id").first().reset_index().set_index("trip_id")
+        last  = stop_times.groupby("trip_id").last().reset_index().set_index("trip_id")
+        freq_map = build_frequency_map(trips, first, last)
+        all_rows = []
+
+        count = _process_trips_chunk(
+            trips_chunk=trips,
+            first=first, last=last,
+            stops_name={"A": "Paris Gare de Lyon", "B": "Lyon Part-Dieu"},
+            stop_country_map=stop_country_map,
+            distances_km=distances_km,
+            durations_min=durations_min,
+            dataset_id_meta="ds-test",
+            processed_dir="/tmp",
+            freq_map=freq_map,
+            all_rows=all_rows,
+        )
+
+        assert count == 2
+        service_types = {r["trip_id"]: r["service_type"] for r in all_rows}
+        assert service_types["T1"] == "JOUR"
+        assert service_types["T2"] == "NUIT"
+
+    def test_multi_trip_international_route(self):
+        """
+        Un trip France→Allemagne : les deux pays doivent être détectés
+        correctement par build_stop_country_map.
+        """
+        stops = pd.DataFrame({
+            "stop_id": ["A", "B"],
+            "stop_lat": [48.8566, 52.52],
+            "stop_lon": [2.3522, 13.40],
+        })
+        stop_times = pd.DataFrame({
+            "trip_id":       ["T1","T1"],
+            "stop_id":       ["A","B"],
+            "stop_sequence": [1, 2],
+            "arrival_time":  ["08:00:00","14:00:00"],
+            "departure_time":["08:05:00","14:05:00"],
+        })
+        trips = pd.DataFrame({
+            "trip_id": ["T1"], "route_id": ["R1"], "service_id": ["S1"],
+            "agency_name": ["DB"], "route_type": ["102"],
+            "route_short_name": ["ICE"], "route_long_name": ["Paris-Berlin"],
+            "monday": ["1"],"tuesday": ["1"],"wednesday": ["1"],
+            "thursday": ["1"],"friday": ["1"],"saturday": ["1"],"sunday": ["1"],
+        })
+
+        stop_country_map = build_stop_country_map(stops)
+        distances_km = compute_distances(stop_times, stops)
+        durations_min = compute_durations(stop_times)
+        first = stop_times.groupby("trip_id").first().reset_index().set_index("trip_id")
+        last  = stop_times.groupby("trip_id").last().reset_index().set_index("trip_id")
+        freq_map = build_frequency_map(trips, first, last)
+        all_rows = []
+
+        count = _process_trips_chunk(
+            trips_chunk=trips,
+            first=first, last=last,
+            stops_name={"A": "Paris Nord", "B": "Berlin Hbf"},
+            stop_country_map=stop_country_map,
+            distances_km=distances_km,
+            durations_min=durations_min,
+            dataset_id_meta="ds-intl",
+            processed_dir="/tmp",
+            freq_map=freq_map,
+            all_rows=all_rows,
+        )
+
+        assert count == 1
+        assert all_rows[0]["origin_country"] == "FR"
+        assert all_rows[0]["destination_country"] == "DE"
+        assert all_rows[0]["distance_km"] > 800  
+        assert all_rows[0]["frequency_per_week"] == 7
+
+    def test_invalid_trip_skipped_does_not_affect_valid_ones(self, stops_paris_lyon):
+        stop_times = pd.DataFrame({
+            "trip_id":       ["T1","T1","T2","T2"],
+            "stop_id":       ["A","B","A","B"],
+            "stop_sequence": [1, 2, 1, 2],
+            "arrival_time":  ["09:50:00","12:00:00","09:50:00","12:00:00"],
+            "departure_time":["09:55:00","12:05:00","09:55:00","12:05:00"],
+        })
+        trips = pd.DataFrame({
+            "trip_id": ["T1","T2"],
+            "route_id": ["R1","R2"],
+            "service_id": ["S1","S2"],
+            "agency_name": ["SNCF","SNCF"],
+            "route_type": ["101","999"],  # T2 → type inconnu → émission 25.0 (valide)
+            "route_short_name": ["TGV",""],
+            "route_long_name":  ["Paris-Lyon",""],
+            "monday": ["1","1"],"tuesday": ["1","1"],"wednesday": ["1","1"],
+            "thursday": ["1","1"],"friday": ["1","1"],"saturday": ["0","0"],"sunday": ["0","0"],
+        })
+
+        stop_country_map = build_stop_country_map(stops_paris_lyon)
+        distances_km = compute_distances(stop_times, stops_paris_lyon)
+        durations_min = compute_durations(stop_times)
+        first = stop_times.groupby("trip_id").first().reset_index().set_index("trip_id")
+        last  = stop_times.groupby("trip_id").last().reset_index().set_index("trip_id")
+        freq_map = build_frequency_map(trips, first, last)
+        all_rows = []
+
+        _process_trips_chunk(
+            trips_chunk=trips,
+            first=first, last=last,
+            stops_name={"A": "Paris Gare de Lyon", "B": "Lyon Part-Dieu"},
+            stop_country_map=stop_country_map,
+            distances_km=distances_km,
+            durations_min=durations_min,
+            dataset_id_meta="ds-test",
+            processed_dir="/tmp",
+            freq_map=freq_map,
+            all_rows=all_rows,
+        )
+
+        assert len(all_rows) == 2
+        trip_ids = {r["trip_id"] for r in all_rows}
+        assert "T1" in trip_ids
+        assert "T2" in trip_ids
+
+
