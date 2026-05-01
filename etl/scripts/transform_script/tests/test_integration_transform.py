@@ -203,3 +203,80 @@ class TestTimeProcessingIntegration:
         assert all_rows[0]["service_type"] == "NUIT"
         assert all_rows[0]["departure_time"] == "23:10:00"
 
+
+# ── gtfs_emission ↔ gtfs_processing ──────────────────────────────────────────
+
+class TestEmissionProcessingIntegration:
+
+    def test_emission_values_match_direct_calculation(self, stops_paris_lyon, stop_times_paris_lyon, trips_tgv):
+        stop_country_map = build_stop_country_map(stops_paris_lyon)
+        distances_km = compute_distances(stop_times_paris_lyon, stops_paris_lyon)
+        durations_min = compute_durations(stop_times_paris_lyon)
+
+        first = stop_times_paris_lyon.iloc[[0]].set_index("trip_id")
+        last  = stop_times_paris_lyon.iloc[[1]].set_index("trip_id")
+        freq_map = build_frequency_map(trips_tgv, first, last)
+        all_rows = []
+
+        _process_trips_chunk(
+            trips_chunk=trips_tgv,
+            first=first, last=last,
+            stops_name={"A": "Paris Gare de Lyon", "B": "Lyon Part-Dieu"},
+            stop_country_map=stop_country_map,
+            distances_km=distances_km,
+            durations_min=durations_min,
+            dataset_id_meta="ds-test",
+            processed_dir="/tmp",
+            freq_map=freq_map,
+            all_rows=all_rows,
+        )
+
+        row = all_rows[0]
+        train_service = classify_train_service("101", "TGV", "SNCF", row["distance_km"], row["duration_h"])
+        traction = estimate_traction("101", "TGV", "SNCF", train_service)
+        expected_gco2e, expected_total = calculate_emissions(row["distance_km"], traction, train_service)
+
+        assert row["emission_gco2e_pkm"] == round(expected_gco2e, 2)
+        assert row["total_emission_kgco2e"] == round(expected_total, 3)
+        assert row["traction"] == traction
+
+    def test_diesel_regional_emission_pipeline(self, stops_paris_lyon):
+        stop_times = pd.DataFrame({
+            "trip_id": ["T1", "T1"],
+            "stop_id": ["A", "B"],
+            "stop_sequence": [1, 2],
+            "arrival_time":   ["09:50:00", "11:00:00"],
+            "departure_time": ["09:55:00", "11:05:00"],
+        })
+        trips_diesel = pd.DataFrame({
+            "trip_id": ["T1"], "route_id": ["R1"], "service_id": ["S1"],
+            "agency_name": ["AUTORAIL Sud"], "route_type": ["106"],
+            "route_short_name": ["TER"], "route_long_name": ["AUTORAIL régional"],
+            "monday": ["1"], "tuesday": ["0"], "wednesday": ["0"],
+            "thursday": ["0"], "friday": ["0"], "saturday": ["0"], "sunday": ["0"],
+        })
+
+        stop_country_map = build_stop_country_map(stops_paris_lyon)
+        distances_km = compute_distances(stop_times, stops_paris_lyon)
+        durations_min = compute_durations(stop_times)
+        first = stop_times.iloc[[0]].set_index("trip_id")
+        last  = stop_times.iloc[[1]].set_index("trip_id")
+        freq_map = build_frequency_map(trips_diesel, first, last)
+        all_rows = []
+
+        _process_trips_chunk(
+            trips_chunk=trips_diesel,
+            first=first, last=last,
+            stops_name={"A": "Paris Gare de Lyon", "B": "Lyon Part-Dieu"},
+            stop_country_map=stop_country_map,
+            distances_km=distances_km,
+            durations_min=durations_min,
+            dataset_id_meta="ds-test",
+            processed_dir="/tmp",
+            freq_map=freq_map,
+            all_rows=all_rows,
+        )
+
+        tgv_gco2e, _ = calculate_emissions(all_rows[0]["distance_km"], "électrique", "Grande vitesse")
+        assert all_rows[0]["emission_gco2e_pkm"] > tgv_gco2e
+
