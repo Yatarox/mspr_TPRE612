@@ -63,6 +63,7 @@ services:
         condition: service_healthy
     networks:
       - rail-network
+      - monitoring
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -101,6 +102,9 @@ services:
     restart: always
     networks:
       - monitoring
+      - rail-network
+    depends_on:
+      - api
 
   grafana:
     build: ./grafana
