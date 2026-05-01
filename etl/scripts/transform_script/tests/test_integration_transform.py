@@ -2,7 +2,6 @@ import os
 import sys
 import json
 import pandas as pd
-import numpy as np
 import pytest
 
 sys.path.append(
@@ -12,10 +11,9 @@ sys.path.append(
 from transform_script.gtfs_geo import (
     build_stop_country_map,
     compute_distances,
-    extract_country_from_stop_name,
 )
-from transform_script.gtfs_time import compute_durations, classifier_train
-from transform_script.gtfs_frequency import build_frequency_map, calculate_frequency_per_week_intermediate
+from transform_script.gtfs_time import compute_durations
+from transform_script.gtfs_frequency import build_frequency_map
 from transform_script.gtfs_emission import estimate_traction, calculate_emissions
 from transform_script.gtfs_processing import _process_trips_chunk, classify_train_service
 from transform_script.gtfs_helpers import read_csv,read_metadata
