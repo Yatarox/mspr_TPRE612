@@ -374,3 +374,57 @@ class TestFrequencyProcessingIntegration:
 
         assert all_rows[0]["frequency_per_week"] == 14
 
+
+# ── gtfs_helpers ↔ gtfs_processing ───────────────────────────────────────────
+
+class TestHelpersProcessingIntegration:
+
+    def test_read_csv_then_process(self, tmp_path, stops_paris_lyon, stop_times_paris_lyon, trips_tgv):
+        trips_file = tmp_path / "trips.txt"
+        trips_tgv.to_csv(trips_file, index=False)
+
+        trips_loaded = read_csv(trips_file)
+        assert set(trips_loaded.columns) == set(trips_tgv.columns)
+
+        stop_country_map = build_stop_country_map(stops_paris_lyon)
+        distances_km = compute_distances(stop_times_paris_lyon, stops_paris_lyon)
+        durations_min = compute_durations(stop_times_paris_lyon)
+        first = stop_times_paris_lyon.iloc[[0]].set_index("trip_id")
+        last  = stop_times_paris_lyon.iloc[[1]].set_index("trip_id")
+        freq_map = build_frequency_map(trips_loaded, first, last)
+        all_rows = []
+
+        count = _process_trips_chunk(
+            trips_chunk=trips_loaded,
+            first=first, last=last,
+            stops_name={"A": "Paris Gare de Lyon", "B": "Lyon Part-Dieu"},
+            stop_country_map=stop_country_map,
+            distances_km=distances_km,
+            durations_min=durations_min,
+            dataset_id_meta="ds-test",
+            processed_dir="/tmp",
+            freq_map=freq_map,
+            all_rows=all_rows,
+        )
+
+        assert count == 1
+        assert all_rows[0]["source_dataset"] == "ds-test"
+
+    def test_metadata_written_and_read_back(self, tmp_path):
+        extract_path = tmp_path / "dataset"
+        extract_path.mkdir()
+
+        metadata = {
+            "source_url": "http://transport.data.gouv.fr",
+            "dataset_id": "ds-sncf",
+            "file_hash": "abc123",
+            "extracted_at": "2025-01-01T00:00:00",
+        }
+        meta_path = extract_path / "metadata.json"
+        with open(meta_path, "w", encoding="utf-8") as f:
+            json.dump(metadata, f)
+
+        read_back = read_metadata(extract_path)
+        assert read_back["dataset_id"] == "ds-sncf"
+        assert read_back["file_hash"] == "abc123"
+
