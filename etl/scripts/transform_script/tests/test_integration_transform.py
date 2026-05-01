@@ -280,3 +280,97 @@ class TestEmissionProcessingIntegration:
         tgv_gco2e, _ = calculate_emissions(all_rows[0]["distance_km"], "électrique", "Grande vitesse")
         assert all_rows[0]["emission_gco2e_pkm"] > tgv_gco2e
 
+
+# ── gtfs_frequency ↔ gtfs_processing ─────────────────────────────────────────
+
+class TestFrequencyProcessingIntegration:
+
+    def test_frequency_map_from_multiple_trips_same_route(self, stops_paris_lyon):
+        """
+        build_frequency_map compte 3 trips sur la même route/service →
+        compute_frequency retourne 3 * jours_actifs.
+        """
+        stop_times = pd.DataFrame({
+            "trip_id": ["T1","T1","T2","T2","T3","T3"],
+            "stop_id": ["A","B","A","B","A","B"],
+            "stop_sequence": [1,2,1,2,1,2],
+            "arrival_time":   ["08:00:00","10:00:00","11:00:00","13:00:00","14:00:00","16:00:00"],
+            "departure_time": ["08:05:00","10:05:00","11:05:00","13:05:00","14:05:00","16:05:00"],
+        })
+        trips = pd.DataFrame({
+            "trip_id": ["T1", "T2", "T3"],
+            "route_id": ["R1", "R1", "R1"],
+            "service_id": ["S1", "S1", "S1"],
+            "agency_name": ["SNCF", "SNCF", "SNCF"],
+            "route_type": ["101", "101", "101"],
+            "route_short_name": ["TGV", "TGV", "TGV"],
+            "route_long_name": ["Paris-Lyon", "Paris-Lyon", "Paris-Lyon"],
+            "monday":    ["1", "1", "1"],
+            "tuesday":   ["1", "1", "1"],
+            "wednesday": ["1", "1", "1"],
+            "thursday":  ["1", "1", "1"],
+            "friday":    ["1", "1", "1"],
+            "saturday":  ["0", "0", "0"],
+            "sunday":    ["0", "0", "0"],
+        })
+
+        first = stop_times[stop_times["stop_sequence"]=="1"].copy()
+        first = stop_times.groupby("trip_id").first().reset_index().set_index("trip_id")
+        last  = stop_times.groupby("trip_id").last().reset_index().set_index("trip_id")
+
+        freq_map = build_frequency_map(trips, first, last)
+        key = ("R1", "S1", "A", "B")
+        assert freq_map[key] == 3
+
+    
+        stop_country_map = build_stop_country_map(stops_paris_lyon)
+        distances_km = compute_distances(stop_times, stops_paris_lyon)
+        durations_min = compute_durations(stop_times)
+        all_rows = []
+
+        _process_trips_chunk(
+            trips_chunk=trips,
+            first=first, last=last,
+            stops_name={"A": "Paris Gare de Lyon", "B": "Lyon Part-Dieu"},
+            stop_country_map=stop_country_map,
+            distances_km=distances_km,
+            durations_min=durations_min,
+            dataset_id_meta="ds-test",
+            processed_dir="/tmp",
+            freq_map=freq_map,
+            all_rows=all_rows,
+        )
+
+        for row in all_rows:
+            assert row["frequency_per_week"] == 15
+
+    def test_tous_les_jours_defaults_to_7_days(self, stops_paris_lyon, stop_times_paris_lyon):
+        trips_no_days = pd.DataFrame({
+            "trip_id": ["T1"], "route_id": ["R1"], "service_id": ["S1"],
+            "agency_name": ["SNCF"], "route_type": ["101"],
+            "route_short_name": ["TGV"], "route_long_name": ["Paris-Lyon"],
+        })
+
+        first = stop_times_paris_lyon.iloc[[0]].set_index("trip_id")
+        last  = stop_times_paris_lyon.iloc[[1]].set_index("trip_id")
+        freq_map = {("R1", "S1", "A", "B"): 2}
+        stop_country_map = build_stop_country_map(stops_paris_lyon)
+        distances_km = compute_distances(stop_times_paris_lyon, stops_paris_lyon)
+        durations_min = compute_durations(stop_times_paris_lyon)
+        all_rows = []
+
+        _process_trips_chunk(
+            trips_chunk=trips_no_days,
+            first=first, last=last,
+            stops_name={"A": "Paris Gare de Lyon", "B": "Lyon Part-Dieu"},
+            stop_country_map=stop_country_map,
+            distances_km=distances_km,
+            durations_min=durations_min,
+            dataset_id_meta="ds-test",
+            processed_dir="/tmp",
+            freq_map=freq_map,
+            all_rows=all_rows,
+        )
+
+        assert all_rows[0]["frequency_per_week"] == 14
+
