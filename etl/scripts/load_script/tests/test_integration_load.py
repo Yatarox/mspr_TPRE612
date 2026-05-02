@@ -348,3 +348,56 @@ class TestStagingFactLoaderIntegration:
             result = load_fact_table(hook, 1)
 
         assert result == 0
+
+class TestFullLoadPipeline:
+
+    def test_end_to_end_single_dataset(self, tmp_path, monkeypatch):
+        csv_path = tmp_path / "trips.csv"
+        rows = [_make_row(trip_id=f"T{i}") for i in range(5)]
+        _write_csv(csv_path, rows)
+
+        hook = MagicMock()
+        load_id = 1
+
+        staged = load_staging_table(hook, csv_path, load_id, 42, 30, 30)
+        assert staged == 5
+
+        hook.get_first.return_value = (5,)
+        with patch("load_script.fact_loader.upsert_dimensions_from_staging"):
+            count = load_fact_table(hook, load_id)
+
+        assert count == 5
+
+    def test_country_sanitization_flows_into_staging_tuple(self, tmp_path):
+        bad_country = "UNKNOWN"
+        sanitized = sanitize_country_for_staging(bad_country, 30, "test")
+        assert sanitized is None
+
+        row = pd.Series(_make_row(origin_country=bad_country))
+        result = _parse_row_to_tuple(row, 1, 42, sanitized, "FR")
+
+        assert result[10] is None   # origin_country dans le tuple
+
+    def test_route_and_agency_extraction_consistent(self):
+        route_name = "TGV_001 - Paris Lyon"
+        agency_name = "AG42:SNCF Voyageurs"
+
+        route_id = _extract_route_id(route_name)
+        agency_id = _extract_agency_id(agency_name)
+
+        row = pd.Series(_make_row(route_name=route_name, agency_name=agency_name))
+        result = _parse_row_to_tuple(row, 1, 42, "FR", "FR")
+
+        assert result[4] == route_id == "TGV_001"
+        assert result[6] == agency_id == "AG42"
+
+    def test_multiple_chunks_all_inserted(self, tmp_path):
+        rows = [_make_row(trip_id=f"T{i}") for i in range(12000)]
+        csv_path = tmp_path / "big.csv"
+        _write_csv(csv_path, rows)
+
+        hook = MagicMock()
+        result = load_staging_table(hook, csv_path, 1, 42, 30, 30)
+
+        assert result == 12000
+        assert hook.run.call_count == 4
