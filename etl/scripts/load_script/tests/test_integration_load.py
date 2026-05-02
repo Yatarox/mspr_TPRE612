@@ -3,14 +3,15 @@ import sys
 import types
 import pandas as pd
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock , patch
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
-
+from load_script.helpers import sanitize_country_for_staging, get_staging_country_limits
 # from load_script.dimension_cache import DimensionCache
 # from load_script import dimension_loaders as dim_mod
-from load_script.staging import load_staging_table
-
+from load_script.staging import (
+    load_staging_table, _extract_route_id, _extract_agency_id, _parse_row_to_tuple
+)
 
 def _install_airflow_stubs():
     for mod_name in [
@@ -95,7 +96,7 @@ class TestValidationStagingIntegration:
         result = load_staging_table(hook, csv_path, 1, 42, 30, 30)
 
         assert result == 0
-        assert hook.run.call_count == 1  # uniquement TRUNCATE
+        assert hook.run.call_count == 1  
 
 
     def test_invalid_distance_skipped(self, tmp_path):
@@ -130,4 +131,80 @@ class TestValidationStagingIntegration:
         result = load_staging_table(hook, csv_path, 1, 42, 30, 30)
 
         assert result == 2
+
+# ── helpers ↔ staging ─────────────────────────────────────────────────────────
+
+class TestHelpersStagingIntegration:
+
+    def test_sanitize_removes_invalid_country_before_insert(self, tmp_path):
+        csv_path = tmp_path / "trips.csv"
+        _write_csv(csv_path, [_make_row(origin_country="UNKNOWN", destination_country="FR")])
+
+        inserted_tuples = []
+        original_insert = MagicMock()
+
+        print("DEBUG: hook.run.call_args_list avant patch:", original_insert.call_args_list)
+
+        def capture_run(sql, parameters=None):
+            if "INSERT INTO stg_trips_summary" in str(sql):
+                inserted_tuples.append(parameters)
+            return None
+
+        hook = MagicMock()
+        hook.run.side_effect = capture_run
+        result = load_staging_table(hook, csv_path, 1, 42, 30, 30)
+
+        assert result == 1
+        flat = inserted_tuples[0]
+        assert flat[10] is None
+
+    def test_date_like_country_sanitized_to_none(self, tmp_path):
+        csv_path = tmp_path / "trips.csv"
+        _write_csv(csv_path, [_make_row(origin_country="2025-01-01")])
+
+        inserted_tuples = []
+        def capture_run(sql, parameters=None):
+            if "INSERT INTO stg_trips_summary" in str(sql):
+                inserted_tuples.append(parameters)
+
+        hook = MagicMock()
+        hook.run.side_effect = capture_run
+        result = load_staging_table(hook, csv_path, 1, 42, 30, 30)
+
+        assert result == 1
+        assert inserted_tuples[0][10] is None
+
+    def test_get_staging_country_limits_used_for_truncation(self, tmp_path):
+        long_country = "FRANCEGERMANYITALY"  # 18 chars
+
+        hook = MagicMock()
+        with patch("load_script.helpers.get_column_max_length", return_value=5):
+            o_len, d_len = get_staging_country_limits(hook)
+
+        result = sanitize_country_for_staging(long_country, o_len, "test")
+        assert result == "FRANC"
+        assert len(result) == 5
+
+    def test_parse_row_to_tuple_extracts_route_and_agency_ids(self):
+        row = pd.Series(_make_row())
+        result = _parse_row_to_tuple(row, 1, 42, "FR", "FR")
+
+        route_id = result[4]
+        agency_id = result[6]
+
+        assert route_id == _extract_route_id("R1 - Paris-Lyon")
+        assert agency_id == _extract_agency_id("SNCF")
+        assert route_id == "R1"
+        assert agency_id == "SNCF"
+
+    def test_parse_row_numeric_fields_converted(self):
+        row = pd.Series(_make_row())
+        result = _parse_row_to_tuple(row, 1, 42, "FR", "FR")
+
+        assert isinstance(result[15], float)   
+        assert isinstance(result[16], float)   
+        assert isinstance(result[20], float)  
+        assert isinstance(result[21], float)  
+        assert isinstance(result[22], int)   
+
 
