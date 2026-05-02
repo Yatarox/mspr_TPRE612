@@ -5,10 +5,11 @@ import pandas as pd
 from pathlib import Path
 from unittest.mock import MagicMock , patch
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+from load_script.fact_loader import upsert_dimensions_from_staging, load_fact_table
 
 from load_script.helpers import sanitize_country_for_staging, get_staging_country_limits
-# from load_script.dimension_cache import DimensionCache
-# from load_script import dimension_loaders as dim_mod
+from load_script.dimension_cache import DimensionCache
+from load_script import dimension_loaders as dim_mod
 from load_script.staging import (
     load_staging_table, _extract_route_id, _extract_agency_id, _parse_row_to_tuple
 )
@@ -208,3 +209,188 @@ class TestHelpersStagingIntegration:
         assert isinstance(result[22], int)   
 
 
+
+class TestCacheLoadersIntegration:
+
+    def _fresh_cache(self, monkeypatch):
+        cache = DimensionCache(max_size=100)
+        monkeypatch.setattr(dim_mod, "dim_cache", cache)
+        return cache
+
+    def test_first_call_misses_cache_second_hits(self, monkeypatch):
+        """
+        Premier appel → miss cache → DB → set cache.
+        Deuxième appel avec même clé → hit cache → pas de DB.
+        """
+        cache = self._fresh_cache(monkeypatch)
+
+        hook = MagicMock()
+        hook.get_first.side_effect = [(42,)]
+
+        r1 = dim_mod.load_dim_country(hook, "FR")
+        assert r1 == 42
+        assert cache.misses == 1
+        assert cache.hits == 0
+
+        hook.get_first.reset_mock()
+        r2 = dim_mod.load_dim_country(hook, "FR")
+        assert r2 == 42
+        assert cache.hits == 1
+        hook.get_first.assert_not_called()
+
+    def test_cache_eviction_triggers_db_again(self, monkeypatch):
+        """
+        Cache de taille 1 : l'insertion d'une 2e clé évince la 1re →
+        le prochain accès à la 1re clé retourne None (miss).
+        """
+        cache = DimensionCache(max_size=1)
+        monkeypatch.setattr(dim_mod, "dim_cache", cache)
+
+        hook = MagicMock()
+        hook.get_first.return_value = (1,)
+
+        dim_mod.load_dim_country(hook, "FR")  # set "country_FR" → 1
+        dim_mod.load_dim_country(hook, "DE")  # évince "country_FR"
+
+        assert cache.get("country_FR") is None
+        assert cache.get("country_DE") == 1
+
+    def test_multiple_dimension_types_share_cache(self, monkeypatch):
+        """
+        Pays, traction et train_type utilisent le même cache mais des clés
+        différentes → pas de collision.
+        """
+        cache = self._fresh_cache(monkeypatch)
+        hook = MagicMock()
+        hook.get_first.return_value = (99,)
+
+        dim_mod.load_dim_country(hook, "FR")
+        dim_mod.load_dim_traction(hook, "électrique")
+        dim_mod.load_dim_train_type(hook, "Grande vitesse")
+
+        assert cache.get("country_FR") == 99
+        assert cache.get("traction_électrique") == 99
+        assert cache.get("train_type_Grande vitesse") == 99
+
+    def test_cache_cleared_between_datasets(self, monkeypatch):
+        """
+        dim_cache.clear() remet hits/misses à zéro et vide le cache →
+        le prochain appel repart de la DB.
+        """
+        cache = self._fresh_cache(monkeypatch)
+        hook = MagicMock()
+        hook.get_first.return_value = (5,)
+
+        dim_mod.load_dim_country(hook, "FR")
+        assert cache.get("country_FR") == 5
+
+        cache.clear()
+
+        # Vérifie directement le dict interne sans passer par get()
+        # (get() incrémenterait misses avant l'assert)
+        assert "country_FR" not in cache.cache
+        assert cache.hits == 0
+        assert cache.misses == 0
+
+    def test_location_with_valid_country_in_db(self, monkeypatch):
+        """
+        load_dim_location vérifie que le pays existe en DB avant d'insérer.
+        Si le pays existe → country_code est préservé dans l'INSERT.
+        """
+        cache = self._fresh_cache(monkeypatch)
+        print("DEBUG: cache initial:", cache.cache)
+        hook = MagicMock()
+        # country exists, location not found, location after insert
+        hook.get_first.side_effect = [(1,), None, (88,)]
+
+        result = dim_mod.load_dim_location(hook, "Paris Gare", "FR")
+
+        assert result == 88
+        insert_params = hook.run.call_args.kwargs["parameters"]
+        assert insert_params == ("Paris Gare", "FR")
+
+    def test_location_with_invalid_country_sets_null(self, monkeypatch):
+        """
+        load_dim_location vérifie que le pays existe en DB.
+        Si absent → country_code mis à NULL dans l'INSERT.
+        """
+        cache = self._fresh_cache(monkeypatch)
+        print("DEBUG: cache initial:", cache.cache)
+        hook = MagicMock()
+        # country NOT found, location not found, location after insert
+        hook.get_first.side_effect = [None, None, (77,)]
+
+        result = dim_mod.load_dim_location(hook, "Unknown Stop", "XX")
+
+        assert result == 77
+        insert_params = hook.run.call_args.kwargs["parameters"]
+        assert insert_params == ("Unknown Stop", None)
+
+
+# ── staging ↔ fact_loader ─────────────────────────────────────────────────────
+
+class TestStagingFactLoaderIntegration:
+
+    def test_upsert_called_with_same_load_id_as_staging(self, tmp_path):
+        """
+        load_staging_table utilise load_id → load_fact_table appelle
+        upsert_dimensions_from_staging avec ce même load_id.
+        """
+        load_id = 999
+        hook = MagicMock()
+        hook.get_first.return_value = (5,)
+
+        with patch("load_script.fact_loader.upsert_dimensions_from_staging") as mock_upsert:
+            result = load_fact_table(hook, load_id)
+        print(f"DEBUG: {result if result is not None else 'None'}")
+
+        mock_upsert.assert_called_once_with(hook, load_id)
+        fact_params = hook.run.call_args.kwargs["parameters"]
+        assert load_id in fact_params
+
+    def test_staging_then_fact_full_flow(self, tmp_path):
+        """
+        Pipeline complet sans DB réelle :
+        1. load_staging_table insère des lignes dans stg
+        2. load_fact_table appelle upsert_dimensions + INSERT fact
+        3. Le count retourné correspond aux lignes insérées
+        """
+        csv_path = tmp_path / "trips.csv"
+        rows = [_make_row(trip_id=f"T{i}") for i in range(3)]
+        _write_csv(csv_path, rows)
+
+        hook = MagicMock()
+        staged = load_staging_table(hook, csv_path, 1, 42, 30, 30)
+        assert staged == 3
+
+        hook.get_first.return_value = (3,)
+        with patch("load_script.fact_loader.upsert_dimensions_from_staging"):
+            count = load_fact_table(hook, 1)
+
+        assert count == 3
+
+    def test_upsert_dimensions_sends_load_id_to_all_tables(self):
+        """
+        upsert_dimensions_from_staging passe load_id à chacun des 10 INSERTs
+        de dimensions — vérifie que chaque appel contient le bon load_id.
+        """
+        hook = MagicMock()
+        load_id = 77
+
+        upsert_dimensions_from_staging(hook, load_id)
+
+        for c in hook.run.call_args_list:
+            params = c.kwargs.get("parameters", ())
+            assert load_id in params, f"load_id absent des params: {params}"
+
+    def test_fact_loader_count_zero_when_no_staging_data(self):
+        """
+        Si la table fact est vide après l'INSERT, load_fact_table retourne 0.
+        """
+        hook = MagicMock()
+        hook.get_first.return_value = (0,)
+
+        with patch("load_script.fact_loader.upsert_dimensions_from_staging"):
+            result = load_fact_table(hook, 1)
+
+        assert result == 0
