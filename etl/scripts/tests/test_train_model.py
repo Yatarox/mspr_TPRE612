@@ -1,7 +1,7 @@
 # test_train_model.py
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 import os 
 import sys
 sys.path.append(
@@ -15,7 +15,6 @@ class TestTrainModelPipeline:
     @patch("train_model.train_model")
     @patch("train_model.use_model")
     def test_train_model_pipeline_success(self, mock_use_model, mock_train_model, mock_extract_data):
-        # Configurer les mocks
         mock_extract_data.extract.return_value = None
         mock_train_model.train.return_value = None
         mock_use_model.summary_model.return_value = {
@@ -26,10 +25,8 @@ class TestTrainModelPipeline:
             "y_pred": [1.5, 2.1, 2.8]
         }
         
-        # Exécuter le pipeline
         result = train_model.train_model_pipeline()
         
-        # Vérifications
         mock_extract_data.extract.assert_called_once()
         mock_train_model.train.assert_called_once()
         mock_use_model.summary_model.assert_called_once()
