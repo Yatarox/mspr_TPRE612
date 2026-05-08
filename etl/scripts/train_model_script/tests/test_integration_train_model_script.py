@@ -171,3 +171,119 @@ class TestTrainToUseIntegration:
         assert isinstance(metrics["r2"], float)
         assert metrics["mae"] >= 0
 
+
+# ── extract_data → use_model ──────────────────────────────────────────────────
+
+class TestExtractToUseIntegration:
+
+    def test_csv_from_extract_loadable_by_use_model(self, tmp_path, monkeypatch):
+        csv_path = tmp_path / "trips_freq.csv"
+        df = _make_df(20)
+
+        monkeypatch.setattr(extract_data.pd, "read_sql", lambda q, e: df)
+        monkeypatch.setattr(extract_data.sqlalchemy, "create_engine", lambda url: object())
+        orig_to_csv = pd.DataFrame.to_csv
+        monkeypatch.setattr(
+            pd.DataFrame, "to_csv",
+            lambda self, path, **kw: orig_to_csv(self, csv_path, **kw)
+        )
+        extract_data.extract()
+
+        X, y = use_model.load_data(str(csv_path))
+        assert not X.empty
+        assert not y.empty
+        assert set(use_model.NUM_FEATURES + use_model.CAT_FEATURES).issubset(X.columns)
+
+
+
+class TestFullPipeline:
+
+    def test_full_pipeline_extract_train_use(self, tmp_path, monkeypatch):
+        csv_path = tmp_path / "trips_freq.csv"
+        model_path = tmp_path / "model.joblib"
+        df = _make_df(40)
+
+        # Step 1 : extract
+        monkeypatch.setattr(extract_data.pd, "read_sql", lambda q, e: df)
+        monkeypatch.setattr(extract_data.sqlalchemy, "create_engine", lambda url: object())
+        orig_to_csv = pd.DataFrame.to_csv
+        monkeypatch.setattr(
+            pd.DataFrame, "to_csv",
+            lambda self, path, **kw: orig_to_csv(self, csv_path, **kw)
+        )
+        extract_data.extract()
+        assert csv_path.exists()
+
+        # Step 2 : train
+        monkeypatch.setattr(train_model, "DATA_PATH", str(csv_path))
+        monkeypatch.setattr(train_model, "MODEL_PATH", str(model_path))
+        train_model.train_and_save()
+        assert model_path.exists()
+
+        # Step 3 : use
+        model, name = use_model.load_model(path=str(model_path))
+        assert name == "RandomForest"
+
+        X, y = use_model.load_data(str(csv_path))
+        metrics = use_model.evaluate(model, X, y)
+
+        assert metrics["mae"] >= 0
+        assert isinstance(metrics["r2"], float)
+
+    def test_full_pipeline_predictions_clipped_to_minimum_one(self, tmp_path, monkeypatch):
+        csv_path = tmp_path / "trips_freq.csv"
+        model_path = tmp_path / "model.joblib"
+        _write_csv(csv_path)
+
+        monkeypatch.setattr(train_model, "DATA_PATH", str(csv_path))
+        monkeypatch.setattr(train_model, "MODEL_PATH", str(model_path))
+        train_model.train_and_save()
+
+        model, _ = use_model.load_model(path=str(model_path))
+
+        sample = pd.DataFrame([
+            {"distance_km": 450, "duration_h": 2.5, "train_type": "Grande vitesse",
+             "traction": "Électrique", "service_type": "JOUR",
+             "origin_country": "FR", "destination_country": "FR"},
+            {"distance_km": 80, "duration_h": 1.2, "train_type": "Régional",
+             "traction": "Diesel", "service_type": "JOUR",
+             "origin_country": "FR", "destination_country": "FR"},
+        ])
+        preds = np.clip(model.predict(sample), 1, None)
+        assert all(p >= 1 for p in preds)
+
+    def test_model_retrained_overwrites_previous(self, tmp_path, monkeypatch):
+        csv_path = tmp_path / "trips_freq.csv"
+        model_path = tmp_path / "model.joblib"
+
+        _write_csv(csv_path, _make_df(20))
+        monkeypatch.setattr(train_model, "DATA_PATH", str(csv_path))
+        monkeypatch.setattr(train_model, "MODEL_PATH", str(model_path))
+        train_model.train_and_save()
+        mtime_1 = os.path.getmtime(model_path)
+
+        import time; time.sleep(0.05)
+
+        _write_csv(csv_path, _make_df(30))
+        train_model.train_and_save()
+        mtime_2 = os.path.getmtime(model_path)
+
+        assert mtime_2 > mtime_1
+
+        model, name = use_model.load_model(path=str(model_path))
+        assert name == "RandomForest"
+        assert hasattr(model, "predict")
+
+    def test_sanity_checks_pass_after_real_training(self, tmp_path, monkeypatch, capsys):
+        csv_path = tmp_path / "trips_freq.csv"
+        model_path = tmp_path / "model.joblib"
+        _write_csv(csv_path, _make_df(40))
+
+        monkeypatch.setattr(train_model, "DATA_PATH", str(csv_path))
+        monkeypatch.setattr(train_model, "MODEL_PATH", str(model_path))
+        model = train_model.train_and_save()
+
+        train_model.sanity_checks(model)
+        captured = capsys.readouterr()
+        assert "SANITY CHECKS" in captured.out
+
