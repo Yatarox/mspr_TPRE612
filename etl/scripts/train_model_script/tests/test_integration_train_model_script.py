@@ -3,8 +3,7 @@ import sys
 import joblib
 import numpy as np
 import pandas as pd
-import pytest
-
+import time
 sys.path.append(
     os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 )
@@ -262,7 +261,7 @@ class TestFullPipeline:
         train_model.train_and_save()
         mtime_1 = os.path.getmtime(model_path)
 
-        import time; time.sleep(0.05)
+        time.sleep(0.05)
 
         _write_csv(csv_path, _make_df(30))
         train_model.train_and_save()
