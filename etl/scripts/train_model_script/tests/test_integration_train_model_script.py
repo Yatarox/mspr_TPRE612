@@ -1,15 +1,15 @@
 import os
 import sys
-
+import joblib
 import numpy as np
 import pandas as pd
-
+import pytest
 
 sys.path.append(
     os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 )
 
-from train_model_script import extract_data, train_model
+from train_model_script import extract_data, train_model, use_model
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -99,4 +99,75 @@ class TestExtractToTrainIntegration:
 
         assert len(X) == 18 
         assert not X.isnull().any().any()
+
+# ── train_model → use_model ───────────────────────────────────────────────────
+
+class TestTrainToUseIntegration:
+
+    def test_model_saved_by_train_is_loadable_by_use_model(self, tmp_path, monkeypatch):
+        csv_path = tmp_path / "trips_freq.csv"
+        model_path = tmp_path / "model.joblib"
+        _write_csv(csv_path)
+
+        monkeypatch.setattr(train_model, "DATA_PATH", str(csv_path))
+        monkeypatch.setattr(train_model, "MODEL_PATH", str(model_path))
+
+        train_model.train_and_save()
+        assert model_path.exists()
+
+        model, name = use_model.load_model(path=str(model_path))
+        assert name == "RandomForest"
+        assert hasattr(model, "predict")
+        assert hasattr(model, "fit")
+
+    def test_model_trained_then_predicts_positive_frequencies(self, tmp_path, monkeypatch):
+        csv_path = tmp_path / "trips_freq.csv"
+        model_path = tmp_path / "model.joblib"
+        _write_csv(csv_path)
+
+        monkeypatch.setattr(train_model, "DATA_PATH", str(csv_path))
+        monkeypatch.setattr(train_model, "MODEL_PATH", str(model_path))
+
+        model = train_model.train_and_save()
+
+        test_cases = pd.DataFrame([{
+            "distance_km": 450, "duration_h": 2.5,
+            "train_type": "Grande vitesse", "traction": "Électrique",
+            "service_type": "JOUR", "origin_country": "FR", "destination_country": "FR",
+        }])
+
+        preds = np.clip(model.predict(test_cases), 1, None)
+        assert all(p >= 1 for p in preds)
+
+    def test_artifact_structure_preserved_through_save_load(self, tmp_path, monkeypatch):
+        csv_path = tmp_path / "trips_freq.csv"
+        model_path = tmp_path / "model.joblib"
+        _write_csv(csv_path)
+
+        monkeypatch.setattr(train_model, "DATA_PATH", str(csv_path))
+        monkeypatch.setattr(train_model, "MODEL_PATH", str(model_path))
+        train_model.train_and_save()
+
+        artifact = joblib.load(model_path)
+        assert set(artifact.keys()) == {"model", "name"}
+        assert artifact["name"] == "RandomForest"
+
+    def test_evaluate_metrics_coherent_between_train_and_use(self, tmp_path, monkeypatch):
+        csv_path = tmp_path / "trips_freq.csv"
+        model_path = tmp_path / "model.joblib"
+        df = _make_df(50)
+        _write_csv(csv_path, df)
+
+        monkeypatch.setattr(train_model, "DATA_PATH", str(csv_path))
+        monkeypatch.setattr(train_model, "MODEL_PATH", str(model_path))
+        model = train_model.train_and_save()
+
+        monkeypatch.setattr(use_model, "DATA_PATH", str(csv_path))
+        X, y = use_model.load_data(str(csv_path))
+        metrics = use_model.evaluate(model, X, y)
+
+        assert "r2" in metrics
+        assert "mae" in metrics
+        assert isinstance(metrics["r2"], float)
+        assert metrics["mae"] >= 0
 
