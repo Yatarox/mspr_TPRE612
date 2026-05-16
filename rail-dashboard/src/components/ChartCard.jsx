@@ -10,7 +10,9 @@ import {
   PieChart,
   Pie,
   Cell,
-  Legend
+  Legend,
+  LineChart,
+  Line
 } from 'recharts'
 
 const defaultValueFormatter = (value) =>
@@ -36,16 +38,19 @@ function ChartCard({
   barColor = '#2c5fdd',
   layout = 'vertical',
   badgeLabel,
-  variant = 'bar'
+  variant = 'bar',
+  animation = true,
+  dataTestId
 }) {
   const isHorizontal = layout === 'horizontal'
   const isPie = variant === 'pie'
+  const isLine = variant === 'line'
 
   const renderTooltip = ({ active, payload, label }) => {
     if (!active || !payload || !payload.length) return null
 
     return (
-      <div className="custom-tooltip">
+      <div className="custom-tooltip" data-testid="chart-tooltip">
         <p className="custom-tooltip-label">{label || payload?.[0]?.name}</p>
         <p className="custom-tooltip-value">{valueFormatter(payload[0].value)}</p>
       </div>
@@ -53,19 +58,19 @@ function ChartCard({
   }
 
   return (
-    <article className={`chart-card ${isHorizontal ? 'chart-card-horizontal' : ''}`}>
+    <article className={`chart-card ${isHorizontal ? 'chart-card-horizontal' : ''}`} data-testid={dataTestId || `chart-${title.replace(/\s/g, '-').toLowerCase()}`}>
       <div className="chart-card-header">
         <div>
-          <h3>{title}</h3>
-          {subtitle ? <p>{subtitle}</p> : null}
+          <h3 data-testid="chart-title">{title}</h3>
+          {subtitle ? <p data-testid="chart-subtitle">{subtitle}</p> : null}
         </div>
-        <span className="chart-card-badge">
+        <span className="chart-card-badge" data-testid="chart-badge">
           {badgeLabel || `${data.length} catégorie${data.length > 1 ? 's' : ''}`}
         </span>
       </div>
 
       {data.length > 0 ? (
-        <div className="chart-wrapper">
+        <div className="chart-wrapper" data-testid="chart-wrapper">
           {isPie ? (
             <ResponsiveContainer width="100%" height={320}>
               <PieChart>
@@ -77,6 +82,7 @@ function ChartCard({
                   cy="50%"
                   outerRadius={105}
                   label
+                  isAnimationActive={animation}
                 >
                   {data.map((_, index) => (
                     <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
@@ -85,6 +91,36 @@ function ChartCard({
                 <Tooltip content={renderTooltip} />
                 <Legend />
               </PieChart>
+            </ResponsiveContainer>
+          ) : isLine ? (
+            <ResponsiveContainer width="100%" height={320}>
+              <LineChart
+                data={data}
+                margin={{ top: 12, right: 12, left: 0, bottom: 16 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(16, 35, 61, 0.10)" />
+                <XAxis 
+                  dataKey={nameKey}
+                  tick={{ fontSize: 12, fill: '#6b7c93' }}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <YAxis 
+                  tickFormatter={(value) => axisFormatter(value)}
+                  tick={{ fontSize: 12, fill: '#6b7c93' }}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <Tooltip content={renderTooltip} />
+                <Line 
+                  type="monotone" 
+                  dataKey={dataKey} 
+                  stroke={barColor} 
+                  strokeWidth={2}
+                  dot={{ fill: barColor, strokeWidth: 2 }}
+                  isAnimationActive={animation}
+                />
+              </LineChart>
             </ResponsiveContainer>
           ) : (
             <ResponsiveContainer width="100%" height={isHorizontal ? 360 : 320}>
@@ -153,13 +189,14 @@ function ChartCard({
                   fill={barColor}
                   radius={isHorizontal ? [0, 10, 10, 0] : [10, 10, 0, 0]}
                   maxBarSize={isHorizontal ? 24 : 40}
+                  isAnimationActive={animation}
                 />
               </BarChart>
             </ResponsiveContainer>
           )}
         </div>
       ) : (
-        <div className="chart-card-empty">
+        <div className="chart-card-empty" data-testid="chart-empty">
           <p>Aucune donnée disponible pour ce graphique.</p>
         </div>
       )}

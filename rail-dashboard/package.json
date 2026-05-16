@@ -1,20 +1,51 @@
 {
   "name": "rail-dashboard",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
+  "description": "Rail Data Warehouse Dashboard - Interface analytique pour les données ferroviaires",
+  "author": "Rail Intelligence Platform",
+  "license": "MIT",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "eslint src --ext js,jsx --report-unused-disable-directives --max-warnings 0",
+    "cypress:open": "cypress open",
+    "cypress:run": "cypress run",
+    "test:e2e": "start-server-and-test dev http://localhost:3000 cypress:run"
   },
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "recharts": "^2.10.3",
-    "axios": "^1.6.5"
+    "axios": "^1.6.5",
+    "react-datepicker": "^4.25.0",
+    "file-saver": "^2.0.5",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "vite": "^5.0.11",
-    "@vitejs/plugin-react": "^4.2.1"
+    "@vitejs/plugin-react": "^4.2.1",
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@types/file-saver": "^2.0.7",
+    "cypress": "^13.6.0",
+    "start-server-and-test": "^2.0.3",
+    "eslint": "^8.55.0",
+    "eslint-plugin-react": "^7.33.2",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.5"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
   }
 }

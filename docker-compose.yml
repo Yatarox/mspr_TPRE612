@@ -92,6 +92,19 @@ services:
       timeout: 3s
       retries: 3
     restart: unless-stopped
+  cypress:
+    build:
+      context: ./rail-dashboard
+      dockerfile: Dockerfile.test
+    container_name: cypress
+    environment:
+      - CYPRESS_BASE_URL=http://dashboard:80
+    depends_on:
+      - dashboard
+      - api
+    networks:
+      - rail-network
+    command: npx cypress run --browser chrome --headless --config-file cypress.config.cjs
 
   prometheus:
     build: ./prometheus

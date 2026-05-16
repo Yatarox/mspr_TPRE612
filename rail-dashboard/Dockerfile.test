@@ -1,0 +1,18 @@
+# rail-dashboard/Dockerfile.test
+FROM cypress/included:13.6.0
+
+WORKDIR /app
+
+# Copier les fichiers de configuration
+COPY package*.json ./
+COPY cypress.config.cjs ./cypress.config.cjs
+COPY cypress ./cypress
+
+# Installer les dépendances (si nécessaire)
+RUN npm install --legacy-peer-deps || true
+
+# Créer le dossier des résultats
+RUN mkdir -p /app/cypress/screenshots /app/cypress/videos
+
+# Commande par défaut
+CMD ["npx", "cypress", "run", "--browser", "chrome", "--headless", "--config-file", "cypress.config.cjs"]

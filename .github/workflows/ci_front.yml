@@ -1,0 +1,36 @@
+name: Tests E2E
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:  # Permet de lancer manuellement
+
+jobs:
+  test-e2e:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout du code
+        uses: actions/checkout@v4
+      
+      - name: 🐳 Lancer les conteneurs
+        run: |
+          docker compose up -d mysql api dashboard
+          sleep 30  # Attendre le démarrage
+      
+      - name: 🧪 Exécuter les tests Cypress
+        run: |
+          docker compose --profile test up cypress
+      
+      - name: 📸 Upload des screenshots (si échec)
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: cypress-screenshots
+          path: rail-dashboard/cypress/screenshots/
+      
+      - name: 🛑 Arrêter les conteneurs
+        if: always()
+        run: docker compose down

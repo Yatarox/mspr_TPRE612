@@ -1,0 +1,10 @@
+{
+  "total_trips": 15423,
+  "total_routes": 342,
+  "total_agencies": 28,
+  "total_distance_km": 1250000,
+  "total_emissions_kg": 425000,
+  "avg_distance_km": 81.2,
+  "avg_duration_h": 1.5,
+  "avg_emission_per_km": 34.5
+}

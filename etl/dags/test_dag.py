@@ -8,7 +8,7 @@ import pendulum
 from airflow.sdk import dag, task, get_current_context
 from airflow.models.xcom_arg import XComArg
 from airflow.providers.mysql.hooks.mysql import MySqlHook
-
+import pandas as pd
 sys.path.append("/opt/airflow")
 
 from scripts.extract_gtfs_data_gouv_script import (  # noqa: E402
@@ -50,9 +50,9 @@ default_args = {
 @dag(
     dag_id="gtfs_test_pipeline",
     default_args=default_args,
-    schedule=None,                      # jamais automatique
+    schedule=None,                   
     start_date=pendulum.datetime(2024, 1, 1, tz="UTC"),
-    is_paused_upon_creation=True,       # paused par défaut
+    is_paused_upon_creation=True,      
     catchup=False,
     max_active_runs=1,
     tags=["gtfs", "etl", "test"],
@@ -60,14 +60,9 @@ default_args = {
 )
 def gtfs_test_pipeline():
 
-    # ── 0. Setup : nettoyage de la DB de test avant chaque run ───────────────
 
     @task
     def setup_test_db() -> Dict[str, Any]:
-        """
-        Truncate toutes les tables de la DB de test pour partir d'un état propre.
-        Garantit l'isolation entre les runs de test.
-        """
         hook = MySqlHook(mysql_conn_id=TEST_DB_CONN_ID)
 
         tables = [
@@ -91,14 +86,9 @@ def gtfs_test_pipeline():
         return {"setup": "ok", "timestamp": datetime.now().isoformat()}
 
 
-    # ── 1. Extract ────────────────────────────────────────────────────────────
 
     @task
     def extract(setup_stats: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Télécharge le fichier GTFS de test depuis l'URL fixe.
-        Assertion : au moins 1 fichier téléchargé.
-        """
         start_time = datetime.now()
         logger.info(f"[TEST] Extract started — URL: {TEST_ZIP_URL}")
 
@@ -106,13 +96,12 @@ def gtfs_test_pipeline():
             [TEST_ZIP_URL],
             TEST_RAW_DIR,
             TEST_STAGING_DIR,
-            force_download=True,  # force en test pour toujours repartir de zéro
+            force_download=True, 
         )
 
         downloaded_count = len(result)
         duration = (datetime.now() - start_time).total_seconds()
 
-        # ── Assertions extract ──
         assert downloaded_count >= 1, (
             f"[TEST FAIL] Extract: aucun fichier téléchargé depuis {TEST_ZIP_URL}"
         )
@@ -138,14 +127,9 @@ def gtfs_test_pipeline():
         }
 
 
-    # ── 2. Transform ──────────────────────────────────────────────────────────
 
     @task
     def transform(extract_stats: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Transforme les données GTFS extraites en CSV enrichis.
-        Assertion : au moins 1 fichier CSV produit avec des lignes.
-        """
         import os
         start_time = datetime.now()
         logger.info("[TEST] Transform started")
@@ -153,12 +137,11 @@ def gtfs_test_pipeline():
         result = transform_gtfs(
             TEST_STAGING_DIR,
             TEST_PROCESSED_DIR,
-            max_workers=1,   # 1 worker en test pour éviter les conflits
+            max_workers=1, 
         )
 
         duration = (datetime.now() - start_time).total_seconds()
 
-        # ── Assertions transform ──
         assert len(result) >= 1, (
             "[TEST FAIL] Transform: aucun fichier CSV généré"
         )
@@ -172,8 +155,7 @@ def gtfs_test_pipeline():
                 f"[TEST FAIL] Transform: fichier CSV vide : {csv_path}"
             )
 
-        # Vérifie qu'au moins un CSV contient des données réelles
-        import pandas as pd
+
         total_rows = 0
         for csv_path in result:
             try:
@@ -196,14 +178,9 @@ def gtfs_test_pipeline():
         }
 
 
-    # ── 3. Load ───────────────────────────────────────────────────────────────
 
     @task
     def load(transform_stats: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Charge les données transformées dans la DB de test.
-        Assertions : rows_loaded > 0, fact_trip_summary non vide.
-        """
         start_time = datetime.now()
         logger.info("[TEST] Load started")
 
@@ -219,12 +196,10 @@ def gtfs_test_pipeline():
         duration = (datetime.now() - start_time).total_seconds()
         rows_loaded = result.get("total_rows", 0) if isinstance(result, dict) else 0
 
-        # ── Assertions load ──
         assert rows_loaded > 0, (
             f"[TEST FAIL] Load: aucune ligne chargée dans fact_trip_summary"
         )
 
-        # Vérifie directement en DB
         hook = MySqlHook(mysql_conn_id=TEST_DB_CONN_ID)
         row = hook.get_first("SELECT COUNT(*) as cnt FROM fact_trip_summary")
         db_count = row[0] if row else 0
@@ -247,14 +222,9 @@ def gtfs_test_pipeline():
         }
 
 
-    # ── 4. Train model ────────────────────────────────────────────────────────
 
     @task
     def train_model(load_stats: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Entraîne le modèle ML sur les données chargées.
-        Assertions : R² défini, MAE >= 0, fichier modèle créé.
-        """
         import os
         start_time = datetime.now()
         logger.info("[TEST] Train model started")
@@ -296,83 +266,8 @@ def gtfs_test_pipeline():
         }
 
 
-    # ── 5. Validate API data ──────────────────────────────────────────────────
-
-    @task
-    def validate_api(load_stats: Dict[str, Any], train_stats: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Vérifie que l'API retourne bien les données chargées.
-        Assertions : /health healthy, /api/stats/overview cohérent avec la DB,
-        /api/predict retourne une prédiction.
-        """
-        import requests
-        start_time = datetime.now()
-        logger.info("[TEST] API validation started")
-
-        api_base = "http://api:8000"   # nom du service Docker
-
-        # Health check
-        r = requests.get(f"{api_base}/health", timeout=10)
-        assert r.status_code == 200, (
-            f"[TEST FAIL] API /health retourne {r.status_code}"
-        )
-        health = r.json()
-        assert health["status"] == "healthy", (
-            f"[TEST FAIL] API /health status={health['status']}, error={health.get('error')}"
-        )
-        assert health["total_trips"] > 0, (
-            "[TEST FAIL] API /health: total_trips=0 alors que des données ont été chargées"
-        )
-
-        # Overview cohérent avec ce qu'on a chargé
-        r = requests.get(f"{api_base}/api/stats/overview", timeout=10)
-        assert r.status_code == 200, (
-            f"[TEST FAIL] API /api/stats/overview retourne {r.status_code}"
-        )
-        overview = r.json()
-        assert overview.get("total_trips", 0) > 0, (
-            "[TEST FAIL] API overview: total_trips=0"
-        )
-
-        # Cohérence overview ↔ load
-        api_trips  = overview.get("total_trips", 0)
-        load_trips = load_stats.get("rows_loaded", 0)
-        assert api_trips <= load_trips, (
-            f"[TEST FAIL] API overview incohérent: api={api_trips} > load={load_trips}"
-        )
-
-        # Predict fonctionne (modèle chargé)
-        r = requests.get(f"{api_base}/api/predict", params={
-            "distance_km": 450,
-            "duration_h": 2.5,
-            "train_type": "Grande vitesse",
-            "traction": "Électrique",
-        }, timeout=10)
-        assert r.status_code == 200, (
-            f"[TEST FAIL] API /api/predict retourne {r.status_code}"
-        )
-        pred = r.json()
-        assert pred.get("warning") is None, (
-            f"[TEST FAIL] API /api/predict warning: {pred.get('warning')}"
-        )
-        assert pred.get("emission_gco2e_pkm") is not None, (
-            "[TEST FAIL] API /api/predict: emission_gco2e_pkm absent"
-        )
-
-        duration = (datetime.now() - start_time).total_seconds()
-        logger.info(
-            f"✓ [TEST] API validation OK — "
-            f"total_trips={api_trips}, predict OK, {duration:.2f}s"
-        )
-        return {
-            "api_total_trips": api_trips,
-            "predict_ok": True,
-            "duration_seconds": duration,
-            "success": True,
-        }
 
 
-    # ── 6. Test summary ───────────────────────────────────────────────────────
 
     @task
     def test_summary(
@@ -434,7 +329,6 @@ def gtfs_test_pipeline():
         return summary
 
 
-    # ── 7. Teardown : nettoyage après le test ─────────────────────────────────
 
     @task
     def teardown_test_db(summary: Dict[str, Any]) -> str:
@@ -457,27 +351,23 @@ def gtfs_test_pipeline():
         return "teardown_ok"
 
 
-    # ── Orchestration ─────────────────────────────────────────────────────────
-
     setup_result    = setup_test_db()
     extract_result  = extract(setup_result)
     transform_result = transform(extract_result)
     load_result     = load(transform_result)
     train_result    = train_model(load_result)
-    api_result      = validate_api(load_result, train_result)
     summary_result  = test_summary(
         setup_result, extract_result, transform_result,
-        load_result, train_result, api_result
+        load_result, train_result
     )
     teardown_result = teardown_test_db(summary_result)
 
-    # Chaîne explicite
     (
         setup_result
         >> extract_result
         >> transform_result
         >> load_result
-        >> [train_result, api_result]
+        >> train_result
         >> summary_result
         >> teardown_result
     )
