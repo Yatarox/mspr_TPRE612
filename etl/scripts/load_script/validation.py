@@ -1,5 +1,3 @@
-
-
 from typing import Any, Tuple, Dict
 import pandas as pd
 
@@ -13,7 +11,7 @@ def validate_row(row: Dict[str, Any]) -> Tuple[bool, str]:
         "destination_stop_name"]
     for field in required:
         val = row.get(field)
-        if val is None or str(val).strip() == "" or str(val) == "ERROR":
+        if val is None or str(val).strip() in ("", "nan") or str(val) == "ERROR":
             return False, f"Missing or invalid {field}"
     try:
         if pd.notna(row.get("distance_km")):

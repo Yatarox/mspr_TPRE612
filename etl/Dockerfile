@@ -18,9 +18,8 @@ USER airflow
 COPY requirements.txt /requirements.txt
 RUN pip install --no-cache-dir -r /requirements.txt
 
-RUN mkdir -p /opt/airflow/data /opt/airflow/logs
-
-RUN chmod -R 777 /opt/airflow/data /opt/airflow/logs
+RUN mkdir -p /opt/airflow/data /opt/airflow/logs /opt/airflow/models
+RUN chmod -R 777 /opt/airflow/data /opt/airflow/logs /opt/airflow/models
 
 COPY ./dags /opt/airflow/dags
 COPY ./scripts /opt/airflow/scripts

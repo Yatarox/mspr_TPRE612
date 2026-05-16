@@ -1,11 +1,12 @@
 from typing import Dict, List, Optional, Tuple
 import pandas as pd
+import numpy as np
 from .gtfs_helpers import is_valid_numeric
 from .gtfs_emission import calculate_emissions, estimate_traction
 from .gtfs_frequency import calculate_frequency_per_week_intermediate
 from .gtfs_geo import extract_country_from_stop_name
 from .gtfs_time import classifier_train
-import logging  
+import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -27,7 +28,6 @@ def _route_title(route_row: Dict, origin_stop_name: str, destination_stop_name: 
     return long or short or "ERROR"
 
 
-
 def split_by_agency(trips: pd.DataFrame) -> Dict[str, pd.DataFrame]:
     if "agency_id" not in trips.columns:
         return {"all": trips}
@@ -40,72 +40,103 @@ def split_by_agency(trips: pd.DataFrame) -> Dict[str, pd.DataFrame]:
             split[str(agency_id)] = subset
     return split if split else {"all": trips}
 
-def _process_trips_chunk(trips_chunk: pd.DataFrame, first, last, stops_name, 
-                         stop_country_map: Dict[str, Optional[str]],
-                         distances_km, durations_min, dataset_id_meta: str, processed_dir: str,
-                         freq_map: Dict[Tuple[str, str, str, str], int],
-                         all_rows: List[Dict]) -> int:
+
+def _process_trips_chunk(
+    trips_chunk: pd.DataFrame,
+    first: pd.DataFrame,
+    last: pd.DataFrame,
+    stops_name: pd.Series,
+    stop_country_map: Dict[str, Optional[str]],
+    distances_km: pd.Series,
+    durations_min: pd.Series,
+    dataset_id_meta: str,
+    processed_dir: str,
+    freq_map: Dict[Tuple[str, str, str, str], int],
+    all_rows: List[Dict],
+) -> int:
+    """
+    Traitement vectorisé du chunk de trips.
+    On évite iterrows() en travaillant colonne par colonne sur le DataFrame entier.
+    """
+    chunk = trips_chunk.copy()
+    chunk["trip_id"] = chunk["trip_id"].astype(str)
+
+    # Filtrer les trips sans first/last
+    valid_mask = chunk["trip_id"].isin(first.index) & chunk["trip_id"].isin(last.index)
+    chunk = chunk[valid_mask].copy()
+    if chunk.empty:
+        return 0
+
+    tids = chunk["trip_id"].values
+
+    # --- Stops origine / destination ---
+    origin_stop_ids = first.loc[tids, "stop_id"].values
+    destination_stop_ids = last.loc[tids, "stop_id"].values
+
+    origin_stop_names = np.array([stops_name.get(sid, "ERROR") for sid in origin_stop_ids])
+    destination_stop_names = np.array([stops_name.get(sid, "ERROR") for sid in destination_stop_ids])
+
+    # --- Distances et durées ---
+    dists = np.array([
+        float(distances_km.get(tid, 0.0)) if tid in distances_km.index else 0.0
+        for tid in tids
+    ])
+    durs = np.array([
+        float(durations_min.get(tid, 0.0) or 0.0) / 60.0 if tid in durations_min.index else 0.0
+        for tid in tids
+    ])
+
+    # --- Départ / arrivée ---
+    dep_times = first.loc[tids, "departure_time"].fillna("").astype(str).values
+    arr_times = last.loc[tids, "arrival_time"].fillna("").astype(str).values
+
+    # --- Route names ---
+    route_type_codes = chunk.get("route_type", pd.Series([""] * len(chunk))).fillna("").astype(str).values
+    agency_names = chunk.get("agency_name", pd.Series(["ERROR"] * len(chunk))).fillna("ERROR").astype(str).values
+
+    route_names = np.array([
+        _route_title(row, orig, dest)
+        for row, orig, dest in zip(chunk.to_dict("records"), origin_stop_names, destination_stop_names)
+    ])
+
+    # --- Service days ---
+    day_cols = [("monday", "Mon"), ("tuesday", "Tue"), ("wednesday", "Wed"),
+                ("thursday", "Thu"), ("friday", "Fri"), ("saturday", "Sat"), ("sunday", "Sun")]
+
+    def _service_days_str(row: Dict) -> str:
+        days = [abbr for col, abbr in day_cols if str(row.get(col, "0")) == "1"]
+        return ",".join(days) if days else "Tous les jours"
+
+    service_days_strs = [_service_days_str(row) for row in chunk.to_dict("records")]
+
+    # --- Pays ---
+    origin_countries = [
+        stop_country_map.get(str(sid)) or extract_country_from_stop_name(name)
+        for sid, name in zip(origin_stop_ids, origin_stop_names)
+    ]
+    destination_countries = [
+        stop_country_map.get(str(sid)) or extract_country_from_stop_name(name)
+        for sid, name in zip(destination_stop_ids, destination_stop_names)
+    ]
+
+    # --- Train service & traction & emissions ---
+    route_ids = chunk.get("route_id", pd.Series([""] * len(chunk))).fillna("").astype(str).values
+    service_ids = chunk.get("service_id", pd.Series([""] * len(chunk))).fillna("").astype(str).values
+
     skipped_invalid = 0
+    initial_len = len(all_rows)
 
-    for idx, tr in enumerate(trips_chunk.iterrows()):
-        _, tr = tr
-        tid = str(tr.get("trip_id", ""))
-        if not tid or tid not in first.index or tid not in last.index:
-            continue
+    for i in range(len(chunk)):
+        tid = tids[i]
+        dist = dists[i]
+        dur = durs[i]
+        route_type_code = route_type_codes[i]
+        route_name = route_names[i]
+        agency_name = agency_names[i]
 
-        dep = str(first.loc[tid].get("departure_time") or "")
-        arr = str(last.loc[tid].get("arrival_time") or "")
-        agency_name = str(tr.get("agency_name", "ERROR") or "ERROR")
-
-        dist = float(distances_km.get(tid, 0.0)) if tid in distances_km.index else 0.0
-        dur = float(durations_min.get(tid, 0.0) or 0.0) / 60.0 if tid in durations_min.index else 0.0
-
-        route_type_code = str(tr.get("route_type", ""))
-        origin_stop_id = first.loc[tid].get("stop_id")
-        destination_stop_id = last.loc[tid].get("stop_id")
-        origin_stop_name = stops_name.get(origin_stop_id, "ERROR")
-        destination_stop_name = stops_name.get(destination_stop_id, "ERROR")
-
-        # Utilise la nouvelle version de _route_title
-        route_name = _route_title(tr, origin_stop_name, destination_stop_name)
-
-        train_service = classify_train_service(
-            route_type_code, route_name, agency_name, dist, dur
-        )
-
-        service_days = []
-        for day, abbr in [
-            ("monday", "Mon"), ("tuesday", "Tue"), ("wednesday", "Wed"),
-            ("thursday", "Thu"), ("friday", "Fri"), ("saturday", "Sat"), ("sunday", "Sun")
-        ]:
-            if str(tr.get(day, "0")) == "1":
-                service_days.append(abbr)
-        service_days_str = ",".join(service_days) if service_days else "Tous les jours"
-
-        origin_country = stop_country_map.get(str(origin_stop_id))
-        destination_country = stop_country_map.get(str(destination_stop_id))
-
-        if origin_country is None:
-            origin_country = extract_country_from_stop_name(origin_stop_name)
-        if destination_country is None:
-            destination_country = extract_country_from_stop_name(destination_stop_name)
-
-        freq_key = (
-            str(tr.get("route_id", "")),
-            str(tr.get("service_id", "")),
-            str(origin_stop_id),
-            str(destination_stop_id),
-        )
-        frequency_per_week = calculate_frequency_per_week_intermediate(
-            service_days_str, freq_key, freq_map
-        )
-
-        traction = estimate_traction(
-            route_type_code, route_name, agency_name, train_service
-        )
-        emission_gco2e_pkm, total_emission_kgco2e = calculate_emissions(
-            dist, traction, train_service
-        )
+        train_service = classify_train_service(route_type_code, route_name, agency_name, dist, dur)
+        traction = estimate_traction(route_type_code, route_name, agency_name, train_service)
+        emission_gco2e_pkm, total_emission_kgco2e = calculate_emissions(dist, traction, train_service)
 
         if not is_valid_numeric(str(emission_gco2e_pkm)):
             logger.warning(
@@ -115,18 +146,29 @@ def _process_trips_chunk(trips_chunk: pd.DataFrame, first, last, stops_name,
             skipped_invalid += 1
             continue
 
+        freq_key = (
+            route_ids[i],
+            service_ids[i],
+            str(origin_stop_ids[i]),
+            str(destination_stop_ids[i]),
+        )
+        frequency_per_week = calculate_frequency_per_week_intermediate(
+            service_days_strs[i], freq_key, freq_map
+        )
+
+        dep = dep_times[i]
         all_rows.append({
             "trip_id": tid,
             "agency_name": agency_name,
             "route_name": route_name,
             "train_type": train_service,
             "service_type": classifier_train(dep) if dep else "INCONNU",
-            "origin_stop_name": origin_stop_name,
-            "origin_country": origin_country,
-            "destination_stop_name": destination_stop_name,
-            "destination_country": destination_country,
+            "origin_stop_name": origin_stop_names[i],
+            "origin_country": origin_countries[i],
+            "destination_stop_name": destination_stop_names[i],
+            "destination_country": destination_countries[i],
             "departure_time": dep,
-            "arrival_time": arr,
+            "arrival_time": arr_times[i],
             "distance_km": round(dist, 3),
             "duration_h": round(dur, 2),
             "emission_gco2e_pkm": round(emission_gco2e_pkm, 2),
@@ -136,9 +178,12 @@ def _process_trips_chunk(trips_chunk: pd.DataFrame, first, last, stops_name,
             "traction": traction,
         })
 
-    return len(all_rows) - skipped_invalid
+    return len(all_rows) - initial_len - skipped_invalid
 
-def classify_train_service(route_type: str, route_name: str, agency_name: str, distance_km: float, duration_h: float) -> str:
+
+def classify_train_service(
+    route_type: str, route_name: str, agency_name: str, distance_km: float, duration_h: float
+) -> str:
     route_type_map = {
         "101": "Grande vitesse",
         "102": "Intercité",

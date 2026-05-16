@@ -2,13 +2,37 @@ name: CI - Airflow Build & Quality
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev, staging]
   pull_request:
     branches: [main]
 
 jobs:
-  build-and-test-airflow:
+
+  lint:
+    name: 🧹 Lint
     runs-on: ubuntu-latest
+    steps:
+      - name: 🛎️ Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: 🐍 Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: 📦 Install ruff
+        run: pip install ruff
+
+      - name: 🧹 Lint code with ruff
+        run: ruff check ./etl/scripts
+
+
+  test:
+    name: 🧪 Unit Tests & Coverage
+    runs-on: ubuntu-latest
+    needs: lint
     steps:
       - name: 🛎️ Checkout repository
         uses: actions/checkout@v3
@@ -23,16 +47,10 @@ jobs:
       - name: 📦 Install dependencies
         run: |
           pip install -r ./etl/requirements.txt
-          pip install pandas
-
-      - name: 🧹 Lint code with ruff
-        run: |
-          pip install ruff
-          ruff check ./etl/scripts
+          pip install pandas pytest pytest-cov
 
       - name: 🧪 Run unit tests with coverage
         run: |
-          pip install pytest pytest-cov
           export PYTHONPATH=$PYTHONPATH:./etl/scripts
           pytest --cov=etl/scripts --cov-report=xml:etl/coverage.xml etl/scripts/
 
@@ -41,6 +59,17 @@ jobs:
         with:
           name: coverage-report-airflow
           path: etl/coverage.xml
+
+
+  docker:
+    name: 🐳 Docker Build
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: 🛎️ Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: 🐳 Build Airflow Docker image
         run: docker build -t mspr-airflow ./etl

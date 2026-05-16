@@ -45,6 +45,16 @@ ORDERED_COLUMNS = [
     "traction",
 ]
 
+# Colonnes stop_times strictement nécessaires — on ne charge pas le reste en RAM
+_STOP_TIMES_NEEDED = [
+    "trip_id",
+    "stop_id",
+    "stop_sequence",
+    "arrival_time",
+    "departure_time",
+    "shape_dist_traveled",
+]
+
 
 def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     if df is None or df.empty:
@@ -64,6 +74,10 @@ def _prepare_stop_times_df(stop_times_df: pd.DataFrame, dataset_id: str) -> pd.D
     if "trip_id" not in stop_times_df.columns:
         logger.warning(f"⚠️ [{dataset_id}] stop_times.txt missing trip_id")
         return pd.DataFrame()
+
+    # Réduire aux colonnes nécessaires immédiatement
+    cols_to_keep = [c for c in _STOP_TIMES_NEEDED if c in stop_times_df.columns]
+    stop_times_df = stop_times_df[cols_to_keep].copy()
 
     if "stop_sequence" not in stop_times_df.columns:
         stop_times_df["stop_sequence"] = 0
@@ -233,22 +247,45 @@ def build_trips_summary_for_dataset(staging_dir: str, dataset_id: str, processed
             logger.warning(f"⚠️ [{dataset_id}] stops.txt missing stop_id/stop_name")
             stops_name = pd.Series(dtype=str)
 
+        # Réduire stops_df aux colonnes nécessaires pour compute_distances avant de libérer le reste
+        stops_geo = stops_df[
+            [c for c in ["stop_id", "stop_lat", "stop_lon"] if c in stops_df.columns]
+        ].copy()
+        del stops_df
+        gc.collect()
+
         stop_times_df = _prepare_stop_times_df(stop_times_df, dataset_id)
         if stop_times_df.empty:
             logger.warning(f"⚠️ [{dataset_id}] No usable stop_times after preparation")
             return 0, ""
 
+        logger.info(f"stop_times shape: {stop_times_df.shape}, "
+                    f"memory: {stop_times_df.memory_usage(deep=True).sum() / 1e6:.1f} MB")
         logger.info(f"stop_times columns: {list(stop_times_df.columns)}")
+        log_memory(f"Before distances for {dataset_id} - ")
+
         logger.info("Computing distances and durations...")
-        distances_km = compute_distances(stop_times_df, stops_df)
-        durations_min = compute_durations(stop_times_df)
+        distances_km = compute_distances(stop_times_df, stops_geo, chunk_size=5000)
+        del stops_geo
+        gc.collect()
+        logger.info(f"Distances computed for {len(distances_km)} trips")
+        durations_min = compute_durations(stop_times_df, chunk_size=5000)
+        logger.info(f"Durations computed for {len(durations_min)} trips")
 
-        first = stop_times_df.groupby("trip_id").first()
-        last = stop_times_df.groupby("trip_id").last()
-
-        log_memory(f"After distance/duration for {dataset_id} - ")
+        # Extraire first/last avant de libérer stop_times_df
+        # On ne garde que stop_id, departure_time, arrival_time
+        st_minimal = stop_times_df[["trip_id", "stop_id", "departure_time", "arrival_time", "stop_sequence"]].copy()
         del stop_times_df
         gc.collect()
+
+        first = st_minimal.groupby("trip_id").first()
+        logger.info(f"First stop_times computed for {len(first)} trips")
+        last = st_minimal.groupby("trip_id").last()
+        logger.info(f"Last stop_times computed for {len(last)} trips")
+        del st_minimal
+        gc.collect()
+
+        log_memory(f"After distance/duration for {dataset_id} - ")
 
         trips = trips_df.copy()
         if "trip_id" not in trips.columns:
@@ -260,7 +297,10 @@ def build_trips_summary_for_dataset(staging_dir: str, dataset_id: str, processed
         del trips_df
         gc.collect()
 
-        trips = trips.merge(routes_df, on="route_id", how="left", suffixes=("", "_route"))
+        # Merge avec seulement les colonnes utiles de routes
+        route_cols = ["route_id", "route_short_name", "route_long_name", "route_type", "agency_id"]
+        route_cols = [c for c in route_cols if c in routes_df.columns]
+        trips = trips.merge(routes_df[route_cols], on="route_id", how="left", suffixes=("", "_route"))
         trips["route_agency_id"] = trips.get("agency_id", "ERROR")
         del routes_df
         gc.collect()
@@ -309,7 +349,7 @@ def build_trips_summary_for_dataset(staging_dir: str, dataset_id: str, processed
                 del trips_chunk
                 gc.collect()
         else:
-            chunk_size = 5000
+            chunk_size = 1000
             for chunk_start in range(0, len(trips), chunk_size):
                 chunk_end = min(chunk_start + chunk_size, len(trips))
                 chunk = trips.iloc[chunk_start:chunk_end].copy()
@@ -384,7 +424,10 @@ def transform_gtfs(staging_dir: str, processed_dir: str, max_workers: int = 4, s
         logger.info("✅ All datasets already processed")
         return [str(p) for p in Path(processed_dir).glob("*/trips_summary_*.csv")]
 
-    safe_workers = min(max_workers, 2)
+    # FIXME: max_workers forcé à 1 pour éviter l'OOM
+    # Deux datasets lourds en parallèle saturent la RAM disponible.
+    # Repasser à 2 uniquement si la machine a >16GB de RAM libre.
+    safe_workers = 2
     total = len(datasets)
     logger.info(f"🚀 Starting transform for {total} datasets (max_workers={safe_workers})")
 

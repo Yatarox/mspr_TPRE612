@@ -1,0 +1,18 @@
+[
+  {
+    "country": "FR",
+    "country_name": "France",
+    "trip_count": 8542,
+    "total_distance": 654321,
+    "total_emissions": 234567,
+    "avg_emission_per_km": 35.8
+  },
+  {
+    "country": "DE",
+    "country_name": "Germany",
+    "trip_count": 3421,
+    "total_distance": 298765,
+    "total_emissions": 98765,
+    "avg_emission_per_km": 33.1
+  }
+]
