@@ -23,21 +23,21 @@ REQUESTS_IN_PROGRESS = Gauge(
 )
 
 PREDICTION_COUNT = Counter(
-    "co2_predictions_total",
-    "Nombre total de prédictions CO2",
+    "frequency_predictions_total",
+    "Nombre total de prédictions de fréquence",
     ["status"],  # success | error
 )
 
 PREDICTION_LATENCY = Histogram(
-    "co2_prediction_duration_seconds",
-    "Latence des prédictions CO2 en secondes",
+    "frequency_prediction_duration_seconds",
+    "Latence des prédictions de fréquence en secondes",
     buckets=[0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0],
 )
 
 PREDICTION_VALUE = Histogram(
-    "co2_prediction_value_gco2e_pkm",
-    "Distribution des valeurs prédites (gCO2e/km)",
-    buckets=[0, 5, 10, 20, 30, 50, 75, 100, 150, 200],
+    "frequency_prediction_value_per_week",
+    "Distribution des valeurs prédites (fréquence/semaine)",
+    buckets=[1, 2, 5, 10, 20, 50, 100, 200, 500, 1000],
 )
 
 

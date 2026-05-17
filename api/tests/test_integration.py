@@ -218,7 +218,7 @@ class TestModelPredictionServicePrometheusIntegration:
         client.get("/api/predict", params=self.VALID_PARAMS)
         after = PREDICTION_VALUE._sum.get()
 
-        assert after == pytest.approx(before + model_service.ADEME_GCO2E_PKM)
+        assert after == pytest.approx(before +  7.0)
 
     def test_predict_frequency_clipped_to_minimum_one(self, monkeypatch):
         class NegModel:

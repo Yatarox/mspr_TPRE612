@@ -24,30 +24,30 @@
     },
     {
       "type": "stat",
-      "title": "Prédictions CO2 (succès)",
+      "title": "Prédictions de fréquence (succès)",
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "targets": [{ "expr": "sum(co2_predictions_total{status=\"success\"})", "legendFormat": "Succès", "refId": "A" }],
+      "targets": [{ "expr": "sum(frequency_predictions_total{status=\"success\"})", "legendFormat": "Succès", "refId": "A" }],
       "gridPos": { "x": 0, "y": 8, "w": 6, "h": 4 }
     },
     {
       "type": "stat",
-      "title": "Prédictions CO2 (erreurs)",
+      "title": "Prédictions de fréquence (erreurs)",
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "targets": [{ "expr": "sum(co2_predictions_total{status=\"error\"})", "legendFormat": "Erreur", "refId": "A" }],
+      "targets": [{ "expr": "sum(frequency_predictions_total{status=\"error\"})", "legendFormat": "Erreur", "refId": "A" }],
       "gridPos": { "x": 6, "y": 8, "w": 6, "h": 4 }
     },
     {
       "type": "graph",
-      "title": "Distribution des valeurs prédites (gCO2e/km)",
+      "title": "Distribution des valeurs prédites (fréquence/semaine)",
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "targets": [{ "expr": "histogram_quantile(0.95, sum(rate(co2_prediction_value_gco2e_pkm_bucket[5m])) by (le))", "legendFormat": "p95", "refId": "A" }],
+      "targets": [{ "expr": "histogram_quantile(0.95, sum(rate(frequency_prediction_value_per_week_bucket[5m])) by (le))", "legendFormat": "p95", "refId": "A" }],
       "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 }
     },
     {
       "type": "graph",
-      "title": "Latence des prédictions CO2",
+      "title": "Latence des prédictions de fréquence",
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "targets": [{ "expr": "histogram_quantile(0.95, sum(rate(co2_prediction_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p95", "refId": "A" }],
+      "targets": [{ "expr": "histogram_quantile(0.95, sum(rate(frequency_prediction_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p95", "refId": "A" }],
       "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 }
     }
   ],

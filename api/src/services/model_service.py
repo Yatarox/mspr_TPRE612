@@ -2,7 +2,7 @@ import joblib
 import numpy as np
 import os
 import time
-
+import pandas as pd
 from middleware.prometheus import (
     PREDICTION_COUNT,
     PREDICTION_LATENCY,
@@ -28,9 +28,6 @@ def is_model_available() -> bool:
 
 
 def load_model():
-    """Charge le modèle en RAM. Appelé au démarrage via lifespan.
-    Si le fichier est absent, le service fonctionne sans modèle et
-    réessaiera automatiquement toutes les 5 min via is_model_available()."""
     global _model, _model_name
     if not os.path.exists(MODEL_PATH):
         print(f"[model_service] Modèle non trouvé à {MODEL_PATH} — réessai automatique toutes les 5 min")
@@ -70,7 +67,7 @@ def predict_co2(distance_km, duration_h, nb_stops, train_type, traction):
                 "warning": "Modèle non disponible"
             }
 
-        import pandas as pd
+
         features = {
             "distance_km": distance_km,
             "duration_h": duration_h,
@@ -87,7 +84,7 @@ def predict_co2(distance_km, duration_h, nb_stops, train_type, traction):
 
         PREDICTION_COUNT.labels(status="success").inc()
         PREDICTION_LATENCY.observe(time.perf_counter() - start)
-        PREDICTION_VALUE.observe(emission_gco2e_pkm)
+        PREDICTION_VALUE.observe(freq)
 
         return {
             "frequency_per_week": freq,
@@ -99,6 +96,7 @@ def predict_co2(distance_km, duration_h, nb_stops, train_type, traction):
     except Exception as exc:
         PREDICTION_COUNT.labels(status="error").inc()
         return {
+            "frequency_per_week": None,
             "emission_gco2e_pkm": None,
             "total_emission_kgco2e": None,
             "model": None,
