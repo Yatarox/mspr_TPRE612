@@ -171,7 +171,7 @@ def test_predict_co2_success_observes_prediction_value(monkeypatch):
     before = PREDICTION_VALUE._sum.get()
     model_service.predict_co2(450, 2.5, 0, "Grande vitesse", "Électrique")
     after = PREDICTION_VALUE._sum.get()
-    assert after == pytest.approx(before + model_service.ADEME_GCO2E_PKM)
+    assert after == pytest.approx(before + 7.0)
 
 
 # ── predict_co2 — gestion d'erreur ────────────────────────────────────────────
