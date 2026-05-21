@@ -276,7 +276,6 @@ def gtfs_test_pipeline():
         transform_stats: Dict,
         load_stats: Dict,
         train_stats: Dict,
-        api_stats: Dict,
     ) -> Dict[str, Any]:
         """
         Résumé final du test E2E.
@@ -288,7 +287,6 @@ def gtfs_test_pipeline():
             "transform": transform_stats,
             "load":      load_stats,
             "train":     train_stats,
-            "api":       api_stats,
         }
 
         failed = [
@@ -316,7 +314,6 @@ def gtfs_test_pipeline():
         logger.info(f"   Total Duration : {total_duration:.2f}s")
         logger.info(f"   Rows Loaded    : {load_stats.get('rows_loaded', 0)}")
         logger.info(f"   Files Generated: {transform_stats.get('files_generated', 0)}")
-        logger.info(f"   API Trips      : {api_stats.get('api_total_trips', 0)}")
         logger.info(f"   Model R²       : {train_stats.get('r2', 'N/A')}")
         logger.info(f"   Failed Stages  : {failed or 'none'}")
         logger.info("=" * 60)
