@@ -2,7 +2,7 @@ import os
 import sys
 import json
 from unittest.mock import patch, MagicMock
-
+import numpy as np
 import pandas as pd
 
 sys.path.append(
@@ -16,6 +16,7 @@ from transform_script.gtfs_helpers import (
     read_metadata,
     is_valid_numeric,
     get_transport_type,
+    _impute_missing_distances
 )
 
 
@@ -125,3 +126,139 @@ def test_get_transport_type():
 def test_get_transport_type_with_non_string_input():
     assert get_transport_type(3) == "Bus"
     assert get_transport_type(None) == "Type None"
+
+def test_impute_missing_distances_basic():
+    from transform_script.gtfs_helpers import _impute_missing_distances
+    
+    df = pd.DataFrame({
+        "trip_id": ["T1", "T2", "T3"],
+        "train_type": ["Rail", "Rail", "Rail"],
+        "distance_km": [100, 0, np.nan],
+        "duration_h": [2.0, 1.0, 1.5],
+        "total_emission_kgco2e": [2.5, 0, np.nan]
+    })
+    
+    result = _impute_missing_distances(df, "test_dataset")
+    
+    assert result.loc[result["trip_id"] == "T2", "distance_km"].values[0] > 0
+    assert result.loc[result["trip_id"] == "T3", "distance_km"].values[0] > 0
+    assert result.loc[result["trip_id"] == "T2", "total_emission_kgco2e"].values[0] > 0
+    assert result.loc[result["trip_id"] == "T3", "total_emission_kgco2e"].values[0] > 0
+    assert result.loc[result["trip_id"] == "T1", "distance_km"].values[0] == 100
+
+
+def test_impute_missing_distances_only_rail():
+    from transform_script.gtfs_helpers import _impute_missing_distances
+    
+    df = pd.DataFrame({
+        "trip_id": ["T1", "T2", "T3"],
+        "train_type": ["Rail", "Bus", "Rail"],
+        "distance_km": [0, 0, 100],
+        "duration_h": [1.0, 1.0, 2.0],
+        "total_emission_kgco2e": [0, 0, 2.5]
+    })
+    
+    result = _impute_missing_distances(df, "test_dataset")
+    
+    assert result.loc[result["trip_id"] == "T1", "distance_km"].values[0] > 0
+    assert result.loc[result["trip_id"] == "T2", "distance_km"].values[0] == 0
+    assert result.loc[result["trip_id"] == "T3", "distance_km"].values[0] == 100
+
+
+def test_impute_missing_distances_no_valid_reference():
+    from transform_script.gtfs_helpers import _impute_missing_distances
+    
+    df = pd.DataFrame({
+        "trip_id": ["T1", "T2"],
+        "train_type": ["Rail", "Rail"],
+        "distance_km": [0, 0],
+        "duration_h": [1.0, 2.0],
+        "total_emission_kgco2e": [0, 0]
+    })
+    
+    result = _impute_missing_distances(df, "test_dataset")
+    
+    assert result.loc[result["trip_id"] == "T1", "distance_km"].values[0] == 0
+    assert result.loc[result["trip_id"] == "T2", "distance_km"].values[0] == 0
+
+
+def test_impute_missing_distances_empty_dataframe():
+    from transform_script.gtfs_helpers import _impute_missing_distances
+    
+    df_empty = pd.DataFrame()
+    
+    result = _impute_missing_distances(df_empty, "test_dataset")
+    
+    assert result.empty
+
+
+def test_impute_missing_distances_no_missing():
+    from transform_script.gtfs_helpers import _impute_missing_distances
+    
+    df = pd.DataFrame({
+        "trip_id": ["T1", "T2", "T3"],
+        "train_type": ["Rail", "Rail", "Bus"],
+        "distance_km": [100, 200, 50],
+        "duration_h": [2.0, 4.0, 1.0],
+        "total_emission_kgco2e": [2.5, 5.0, 1.2]
+    })
+    
+    original = df.copy()
+    result = _impute_missing_distances(df, "test_dataset")
+    
+    pd.testing.assert_frame_equal(original, result)
+
+
+def test_impute_missing_distances_uses_median_speed():
+    from transform_script.gtfs_helpers import _impute_missing_distances
+    
+    df = pd.DataFrame({
+        "trip_id": ["T1", "T2", "T3", "T4"],
+        "train_type": ["Rail", "Rail", "Rail", "Rail"],
+        "distance_km": [100, 200, 0, np.nan],
+        "duration_h": [2.0, 4.0, 3.0, 1.5],
+        "total_emission_kgco2e": [2.5, 5.0, 0, np.nan]
+    })
+    
+    result = _impute_missing_distances(df, "test_dataset")
+    
+    assert result.loc[result["trip_id"] == "T3", "distance_km"].values[0] == 150.0
+    assert result.loc[result["trip_id"] == "T4", "distance_km"].values[0] == 75.0
+    assert result.loc[result["trip_id"] == "T3", "total_emission_kgco2e"].values[0] == 3.75
+    assert result.loc[result["trip_id"] == "T4", "total_emission_kgco2e"].values[0] == 1.88
+
+
+def test_impute_missing_distances_with_mixed_valid_data():
+    from transform_script.gtfs_helpers import _impute_missing_distances
+    
+    df = pd.DataFrame({
+        "trip_id": ["T1", "T2", "T3", "T4", "T5"],
+        "train_type": ["Rail", "Rail", "Bus", "Rail", "Metro"],
+        "distance_km": [80, 0, 30, np.nan, 0],
+        "duration_h": [1.6, 2.0, 1.0, 2.5, 1.0],
+        "total_emission_kgco2e": [2.0, 0, 0.8, np.nan, 0]
+    })
+    
+    result = _impute_missing_distances(df, "test_dataset")
+    
+    assert result.loc[result["trip_id"] == "T2", "distance_km"].values[0] == 100.0
+    assert result.loc[result["trip_id"] == "T4", "distance_km"].values[0] == 125.0
+    assert result.loc[result["trip_id"] == "T3", "distance_km"].values[0] == 30
+    assert result.loc[result["trip_id"] == "T5", "distance_km"].values[0] == 0
+
+
+def test_impute_missing_distances_no_rail_at_all():
+    from transform_script.gtfs_helpers import _impute_missing_distances
+    
+    df = pd.DataFrame({
+        "trip_id": ["T1", "T2"],
+        "train_type": ["Bus", "Metro"],
+        "distance_km": [0, np.nan],
+        "duration_h": [1.0, 1.5],
+        "total_emission_kgco2e": [0, np.nan]
+    })
+    
+    result = _impute_missing_distances(df, "test_dataset")
+    
+    assert result.loc[result["trip_id"] == "T1", "distance_km"].values[0] == 0
+    assert np.isnan(result.loc[result["trip_id"] == "T2", "distance_km"].values[0])
