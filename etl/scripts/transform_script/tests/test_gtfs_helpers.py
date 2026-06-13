@@ -128,7 +128,6 @@ def test_get_transport_type_with_non_string_input():
     assert get_transport_type(None) == "Type None"
 
 def test_impute_missing_distances_basic():
-    from transform_script.gtfs_helpers import _impute_missing_distances
     
     df = pd.DataFrame({
         "trip_id": ["T1", "T2", "T3"],
@@ -148,7 +147,6 @@ def test_impute_missing_distances_basic():
 
 
 def test_impute_missing_distances_only_rail():
-    from transform_script.gtfs_helpers import _impute_missing_distances
     
     df = pd.DataFrame({
         "trip_id": ["T1", "T2", "T3"],
@@ -166,7 +164,6 @@ def test_impute_missing_distances_only_rail():
 
 
 def test_impute_missing_distances_no_valid_reference():
-    from transform_script.gtfs_helpers import _impute_missing_distances
     
     df = pd.DataFrame({
         "trip_id": ["T1", "T2"],
@@ -183,7 +180,6 @@ def test_impute_missing_distances_no_valid_reference():
 
 
 def test_impute_missing_distances_empty_dataframe():
-    from transform_script.gtfs_helpers import _impute_missing_distances
     
     df_empty = pd.DataFrame()
     
@@ -193,7 +189,6 @@ def test_impute_missing_distances_empty_dataframe():
 
 
 def test_impute_missing_distances_no_missing():
-    from transform_script.gtfs_helpers import _impute_missing_distances
     
     df = pd.DataFrame({
         "trip_id": ["T1", "T2", "T3"],
@@ -210,7 +205,6 @@ def test_impute_missing_distances_no_missing():
 
 
 def test_impute_missing_distances_uses_median_speed():
-    from transform_script.gtfs_helpers import _impute_missing_distances
     
     df = pd.DataFrame({
         "trip_id": ["T1", "T2", "T3", "T4"],
@@ -229,7 +223,6 @@ def test_impute_missing_distances_uses_median_speed():
 
 
 def test_impute_missing_distances_with_mixed_valid_data():
-    from transform_script.gtfs_helpers import _impute_missing_distances
     
     df = pd.DataFrame({
         "trip_id": ["T1", "T2", "T3", "T4", "T5"],
@@ -248,7 +241,6 @@ def test_impute_missing_distances_with_mixed_valid_data():
 
 
 def test_impute_missing_distances_no_rail_at_all():
-    from transform_script.gtfs_helpers import _impute_missing_distances
     
     df = pd.DataFrame({
         "trip_id": ["T1", "T2"],
