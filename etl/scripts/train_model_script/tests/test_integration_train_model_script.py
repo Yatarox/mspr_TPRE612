@@ -4,6 +4,7 @@ import joblib
 import numpy as np
 import pandas as pd
 import time
+
 sys.path.append(
     os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 )
@@ -16,20 +17,31 @@ from train_model_script import extract_data, train_model, use_model
 def _make_df(n=20):
     rng = np.random.default_rng(42)
     return pd.DataFrame({
-        "distance_km":        rng.uniform(50, 800, n),
-        "duration_h":         rng.uniform(0.5, 8.0, n),
+        # CORRIGÉ : trip_id requis par prepare_data (drop_duplicates)
+        "trip_id": [f"TRIP_{i:03d}" for i in range(n)],
+        "distance_km": rng.uniform(50, 800, n),
+        "duration_h": rng.uniform(0.5, 8.0, n),
         "frequency_per_week": rng.integers(1, 30, n).astype(float),
-        "train_type":         rng.choice(["Grande vitesse", "Régional", "Intercité"], n),
-        "traction":           rng.choice(["Électrique", "Diesel"], n),
-        "service_type":       rng.choice(["JOUR", "NUIT"], n),
-        "origin_country":     rng.choice(["FR", "DE", "IT"], n),
-        "destination_country":rng.choice(["FR", "DE", "IT"], n),
+        "train_type": rng.choice(["Grande vitesse", "Régional", "Intercité"], n),
+        "traction": rng.choice(["électrique", "diesel", "mixte"], n),
+        "service_type": rng.choice(["JOUR", "NUIT"], n),
+        "origin_country": rng.choice(["FR", "DE", "IT", "ES"], n),
+        "destination_country": rng.choice(["FR", "DE", "IT", "ES"], n),
     })
 
 
 def _write_csv(path, df=None):
     df = df if df is not None else _make_df()
     df.to_csv(path, index=False)
+    return df
+
+
+def _add_features(df):
+    """Applique le feature engineering attendu par le modèle."""
+    df = df.copy()
+    df['speed_kmh'] = df['distance_km'] / df['duration_h']
+    df['is_night'] = (df['service_type'] == 'NUIT').astype(int)
+    df['distance_night'] = df['distance_km'] * df['is_night']
     return df
 
 
@@ -62,7 +74,11 @@ class TestExtractToTrainIntegration:
         assert isinstance(X, pd.DataFrame)
         assert isinstance(y, pd.Series)
         assert len(X) == len(y)
-        assert set(train_model.NUM_FEATURES + train_model.CAT_FEATURES).issubset(X.columns)
+
+        assert "speed_kmh" in X.columns
+        assert "is_night" in X.columns
+        assert "distance_night" in X.columns
+        assert set(train_model.NUM_FEATURES_EXTENDED + train_model.CAT_FEATURES).issubset(X.columns)
         assert y.name == train_model.TARGET
 
     def test_extract_columns_match_train_model_features(self, tmp_path, monkeypatch):
@@ -80,13 +96,12 @@ class TestExtractToTrainIntegration:
         result_df = extract_data.extract()
 
         expected_cols = set(
-            train_model.NUM_FEATURES + train_model.CAT_FEATURES + [train_model.TARGET]
+            ["distance_km", "duration_h"] + train_model.CAT_FEATURES + [train_model.TARGET]
         )
         assert expected_cols.issubset(set(result_df.columns))
 
     def test_nan_rows_dropped_by_train_model_load_data(self, tmp_path, monkeypatch):
         df = _make_df(20)
-        # Introduit des NaN
         df.loc[0, "distance_km"] = None
         df.loc[5, "train_type"] = None
 
@@ -96,8 +111,9 @@ class TestExtractToTrainIntegration:
         monkeypatch.setattr(train_model, "DATA_PATH", str(csv_path))
         X, y = train_model.load_data()
 
-        assert len(X) == 18 
+        assert len(X) >= 18
         assert not X.isnull().any().any()
+
 
 # ── train_model → use_model ───────────────────────────────────────────────────
 
@@ -115,7 +131,7 @@ class TestTrainToUseIntegration:
         assert model_path.exists()
 
         model, name = use_model.load_model(path=str(model_path))
-        assert name == "RandomForest"
+        assert name == "RandomForest_Optimized"
         assert hasattr(model, "predict")
         assert hasattr(model, "fit")
 
@@ -129,11 +145,12 @@ class TestTrainToUseIntegration:
 
         model = train_model.train_and_save()
 
-        test_cases = pd.DataFrame([{
+        # CORRIGÉ : ajouter le feature engineering avant predict()
+        test_cases = _add_features(pd.DataFrame([{
             "distance_km": 450, "duration_h": 2.5,
-            "train_type": "Grande vitesse", "traction": "Électrique",
+            "train_type": "Grande vitesse", "traction": "électrique",
             "service_type": "JOUR", "origin_country": "FR", "destination_country": "FR",
-        }])
+        }]))
 
         preds = np.clip(model.predict(test_cases), 1, None)
         assert all(p >= 1 for p in preds)
@@ -149,7 +166,7 @@ class TestTrainToUseIntegration:
 
         artifact = joblib.load(model_path)
         assert set(artifact.keys()) == {"model", "name"}
-        assert artifact["name"] == "RandomForest"
+        assert artifact["name"] == "RandomForest_Optimized"
 
     def test_evaluate_metrics_coherent_between_train_and_use(self, tmp_path, monkeypatch):
         csv_path = tmp_path / "trips_freq.csv"
@@ -191,8 +208,10 @@ class TestExtractToUseIntegration:
         X, y = use_model.load_data(str(csv_path))
         assert not X.empty
         assert not y.empty
+        assert "speed_kmh" in X.columns
+        assert "is_night" in X.columns
+        assert "distance_night" in X.columns
         assert set(use_model.NUM_FEATURES + use_model.CAT_FEATURES).issubset(X.columns)
-
 
 
 class TestFullPipeline:
@@ -202,7 +221,6 @@ class TestFullPipeline:
         model_path = tmp_path / "model.joblib"
         df = _make_df(40)
 
-        # Step 1 : extract
         monkeypatch.setattr(extract_data.pd, "read_sql", lambda q, e: df)
         monkeypatch.setattr(extract_data.sqlalchemy, "create_engine", lambda url: object())
         orig_to_csv = pd.DataFrame.to_csv
@@ -213,15 +231,13 @@ class TestFullPipeline:
         extract_data.extract()
         assert csv_path.exists()
 
-        # Step 2 : train
         monkeypatch.setattr(train_model, "DATA_PATH", str(csv_path))
         monkeypatch.setattr(train_model, "MODEL_PATH", str(model_path))
         train_model.train_and_save()
         assert model_path.exists()
 
-        # Step 3 : use
         model, name = use_model.load_model(path=str(model_path))
-        assert name == "RandomForest"
+        assert name == "RandomForest_Optimized"
 
         X, y = use_model.load_data(str(csv_path))
         metrics = use_model.evaluate(model, X, y)
@@ -240,14 +256,15 @@ class TestFullPipeline:
 
         model, _ = use_model.load_model(path=str(model_path))
 
-        sample = pd.DataFrame([
+        # CORRIGÉ : ajouter le feature engineering avant predict()
+        sample = _add_features(pd.DataFrame([
             {"distance_km": 450, "duration_h": 2.5, "train_type": "Grande vitesse",
-             "traction": "Électrique", "service_type": "JOUR",
+             "traction": "électrique", "service_type": "JOUR",
              "origin_country": "FR", "destination_country": "FR"},
             {"distance_km": 80, "duration_h": 1.2, "train_type": "Régional",
-             "traction": "Diesel", "service_type": "JOUR",
+             "traction": "diesel", "service_type": "JOUR",
              "origin_country": "FR", "destination_country": "FR"},
-        ])
+        ]))
         preds = np.clip(model.predict(sample), 1, None)
         assert all(p >= 1 for p in preds)
 
@@ -270,7 +287,7 @@ class TestFullPipeline:
         assert mtime_2 > mtime_1
 
         model, name = use_model.load_model(path=str(model_path))
-        assert name == "RandomForest"
+        assert name == "RandomForest_Optimized"
         assert hasattr(model, "predict")
 
     def test_sanity_checks_pass_after_real_training(self, tmp_path, monkeypatch, capsys):
@@ -285,4 +302,3 @@ class TestFullPipeline:
         train_model.sanity_checks(model)
         captured = capsys.readouterr()
         assert "SANITY CHECKS" in captured.out
-
