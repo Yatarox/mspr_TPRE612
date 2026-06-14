@@ -38,7 +38,6 @@ def test_load_data(monkeypatch):
     monkeypatch.setattr(use_model.pd, "read_csv", lambda path: df)
     X, y = use_model.load_data()
     
-    # Vérifie les nouvelles features
     assert isinstance(X, pd.DataFrame)
     assert isinstance(y, pd.Series)
     assert not X.empty
@@ -88,7 +87,8 @@ def test_summary_model(monkeypatch, capsys):
         df_copy['speed_kmh'] = df_copy['distance_km'] / df_copy['duration_h']
         df_copy['is_night'] = (df_copy['service_type'] == 'NUIT').astype(int)
         df_copy['distance_night'] = df_copy['distance_km'] * df_copy['is_night']
-        X = df_copy[use_model.NUM_FEATURES + use_model.CAT_FEATURES]
+        # CORRIGÉ: utilise NUM_FEATURES_EXTENDED au lieu de NUM_FEATURES
+        X = df_copy[use_model.NUM_FEATURES_EXTENDED + use_model.CAT_FEATURES]
         y = df_copy[use_model.TARGET]
         return X, y
     
@@ -117,7 +117,6 @@ def test_main(monkeypatch):
 
 
 def test_load_data_cleaning(monkeypatch):
-    """Test que les lignes invalides sont filtrées"""
     df = pd.DataFrame({
         "distance_km": [0, 20, -5, 100],
         "duration_h": [1, 0, 2, 3],
@@ -137,7 +136,6 @@ def test_load_data_cleaning(monkeypatch):
 
 
 def test_load_data_feature_engineering(monkeypatch):
-    """Test que le feature engineering fonctionne correctement"""
     df = pd.DataFrame({
         "distance_km": [100, 200],
         "duration_h": [2, 4],
@@ -151,10 +149,9 @@ def test_load_data_feature_engineering(monkeypatch):
     monkeypatch.setattr(use_model.pd, "read_csv", lambda path: df)
     X, y = use_model.load_data()
     
-    # Vérifie les calculs
-    assert X.iloc[0]["speed_kmh"] == 50.0  # 100/2
+    assert X.iloc[0]["speed_kmh"] == 50.0
     assert X.iloc[0]["is_night"] == 0
     assert X.iloc[0]["distance_night"] == 0
-    assert X.iloc[1]["speed_kmh"] == 50.0  # 200/4
+    assert X.iloc[1]["speed_kmh"] == 50.0
     assert X.iloc[1]["is_night"] == 1
     assert X.iloc[1]["distance_night"] == 200
