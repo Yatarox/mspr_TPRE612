@@ -8,10 +8,11 @@ from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.linear_model import Ridge
-
-DATA_PATH = "ton_fichier.csv"
+import os
+DATA_PATH = "data/test2.csv"
 MODEL_PATH = "models/frequency_model.joblib"
 
+os.makedirs("models", exist_ok=True)
 # Chargement
 df = pd.read_csv(DATA_PATH)
 
@@ -32,11 +33,17 @@ X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, random_state=42, stratify=X['service_type']
 )
 
+# Calcul des poids pour rééquilibrer JOUR/NUIT
+# Les trains de nuit sont sous-représentés (149 vs 2932)
+n_jour = len(X_train[X_train['service_type'] == 'JOUR'])
+n_nuit = len(X_train[X_train['service_type'] == 'NUIT'])
+sample_weights = X_train['service_type'].map({'JOUR': 1, 'NUIT': n_jour / n_nuit}).values
+
 # Préprocesseur
 def build_pipeline(estimator):
     preprocessor = ColumnTransformer([
         ("num", StandardScaler(), NUM_FEATURES),
-        ("cat", OneHotEncoder(handle_unknown="ignore", drop='first'), CAT_FEATURES), 
+        ("cat", OneHotEncoder(handle_unknown="ignore", drop='first'), CAT_FEATURES),
     ])
     return make_pipeline(preprocessor, estimator)
 
@@ -57,9 +64,11 @@ results = {}
 for name, estimator in models.items():
     pipeline = build_pipeline(estimator)
     
-    if name in ["Random Forest", "Gradient Boosting", "XGBoost"]:
-        weights = X_train['service_type'].map({'JOUR': 1, 'NUIT': len(X_train)/len(X_train[X_train['service_type']=='NUIT'])})
-        pipeline.fit(X_train, y_train, **{f"{name.lower().replace(' ', '_')}__sample_weight": weights})
+    # sample_weight uniquement pour les modèles qui le supportent
+    if name in ["Random Forest", "Gradient Boosting"]:
+        # Récupérer le nom du dernier step (l'estimateur)
+        estimator_name = pipeline.steps[-1][0]
+        pipeline.fit(X_train, y_train, **{f"{estimator_name}__sample_weight": sample_weights})
     else:
         pipeline.fit(X_train, y_train)
     
@@ -68,6 +77,7 @@ for name, estimator in models.items():
     mae = mean_absolute_error(y_test, y_pred)
     mae_pct = mae / y_test.mean() * 100
     
+    # Cross-validation (sans sample_weight pour simplifier la comparaison)
     cv_scores = cross_val_score(pipeline, X, y, cv=5, scoring="r2", n_jobs=-1)
     cv_mean = cv_scores.mean()
     
