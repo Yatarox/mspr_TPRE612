@@ -78,7 +78,7 @@ class TestExtractToTrainIntegration:
         assert "speed_kmh" in X.columns
         assert "is_night" in X.columns
         assert "distance_night" in X.columns
-        assert set(train_model.NUM_FEATURES_EXTENDED + train_model.CAT_FEATURES).issubset(X.columns)
+        assert set(use_model.NUM_FEATURES_EXTENDED + use_model.CAT_FEATURES).issubset(X.columns)
         assert y.name == train_model.TARGET
 
     def test_extract_columns_match_train_model_features(self, tmp_path, monkeypatch):
@@ -211,7 +211,7 @@ class TestExtractToUseIntegration:
         assert "speed_kmh" in X.columns
         assert "is_night" in X.columns
         assert "distance_night" in X.columns
-        assert set(use_model.NUM_FEATURES + use_model.CAT_FEATURES).issubset(X.columns)
+        assert set(use_model.NUM_FEATURES_EXTENDED + use_model.CAT_FEATURES).issubset(X.columns)
 
 
 class TestFullPipeline:
