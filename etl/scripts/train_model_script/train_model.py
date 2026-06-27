@@ -16,8 +16,6 @@ NUM_FEATURES = ["distance_km", "duration_h"]
 CAT_FEATURES = ["service_type", "traction"]
 TARGET = "frequency_per_week"
 
-# CORRIGÉ : NUM_FEATURES_EXTENDED promu au niveau module pour être accessible
-# dans build_model() et manual_cases() sans avoir à le redéfinir partout
 NUM_FEATURES_EXTENDED = ["distance_km", "duration_h", "speed_kmh", "is_night", "distance_night"]
 
 
