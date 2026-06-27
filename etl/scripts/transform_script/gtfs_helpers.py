@@ -63,3 +63,37 @@ def get_transport_type(route_type_code: str) -> str:
     }
     return route_type_map.get(str(route_type_code), f"Type {route_type_code}")
 
+def _impute_missing_distances(df: pd.DataFrame, dataset_id: str) -> pd.DataFrame:
+
+    if df.empty:
+        return df
+
+    rail_mask = df.get("train_type", "") == "Rail"
+    missing_dist_mask = rail_mask & ((df["distance_km"] == 0) | df["distance_km"].isna())
+    
+    if not missing_dist_mask.any():
+        return df
+    
+    valid_trips = df[rail_mask & (df["distance_km"] > 0) & (df["duration_h"] > 0)]
+    
+    if len(valid_trips) > 0:
+        # Vitesse moyenne globale
+        avg_speed = (valid_trips["distance_km"] / valid_trips["duration_h"]).median()
+        logger.info(f"📏 [{dataset_id}] Average rail speed: {avg_speed:.1f} km/h")
+        
+        # Imputer
+        df.loc[missing_dist_mask, "distance_km"] = (
+            avg_speed * df.loc[missing_dist_mask, "duration_h"]
+        ).round(1)
+        
+        emission_factor = 25 
+        df.loc[missing_dist_mask, "total_emission_kgco2e"] = (
+            df.loc[missing_dist_mask, "distance_km"] * emission_factor / 1000
+        ).round(2)
+        
+        logger.info(f"📏 [{dataset_id}] Imputed {missing_dist_mask.sum()} missing distances")
+    else:
+        logger.warning(f"⚠️ [{dataset_id}] No valid distances to compute average speed")
+    
+    return df
+

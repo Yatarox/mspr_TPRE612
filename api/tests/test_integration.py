@@ -17,7 +17,7 @@ from middleware.prometheus import (
 
 class _FakeModel:
     def predict(self, X):
-        return np.array([7.0])
+        return np.array([15.0])  # Fréquence réaliste
 
 
 @pytest.fixture(autouse=True)
@@ -147,11 +147,13 @@ class TestModelPredictionServicePrometheusIntegration:
     VALID_PARAMS = {
         "distance_km": 450.0,
         "duration_h": 2.5,
-        "train_type": "Grande vitesse",
-        "traction": "Électrique",
+        "traction": "électrique",
+        "service_type": "JOUR",
+        "train_type": "Grande vitesse",  # Ignoré mais accepté
+        "nb_stops": 0,                   # Ignoré mais accepté
     }
 
-    def test_predict_route_calls_real_predict_co2_model_unavailable(self, monkeypatch):
+    def test_predict_route_calls_real_predict_frequency_model_unavailable(self, monkeypatch):
         monkeypatch.setattr(model_service, "is_model_available", lambda: False)
         client = TestClient(app)
         response = client.get("/api/predict", params=self.VALID_PARAMS)
@@ -161,7 +163,7 @@ class TestModelPredictionServicePrometheusIntegration:
     def test_predict_route_with_real_model_in_cache(self, monkeypatch):
         monkeypatch.setattr(model_service, "is_model_available", lambda: True)
         monkeypatch.setattr(model_service, "_model", _FakeModel())
-        monkeypatch.setattr(model_service, "_model_name", "RandomForest")
+        monkeypatch.setattr(model_service, "_model_name", "RandomForest_Optimized")
 
         client = TestClient(app)
         response = client.get("/api/predict", params=self.VALID_PARAMS)
@@ -169,15 +171,16 @@ class TestModelPredictionServicePrometheusIntegration:
         assert response.status_code == 200
         data = response.json()
         assert data["warning"] is None
-        assert data["model"] == "RandomForest"
+        assert data["model"] == "RandomForest_Optimized"
         assert data["emission_gco2e_pkm"] == model_service.ADEME_GCO2E_PKM
+        assert "frequency_per_week" in data
         expected_total = model_service.ADEME_GCO2E_PKM * 450.0 / 1000
         assert data["total_emission_kgco2e"] == pytest.approx(expected_total)
 
     def test_predict_increments_prometheus_success_counter(self, monkeypatch):
         monkeypatch.setattr(model_service, "is_model_available", lambda: True)
         monkeypatch.setattr(model_service, "_model", _FakeModel())
-        monkeypatch.setattr(model_service, "_model_name", "RandomForest")
+        monkeypatch.setattr(model_service, "_model_name", "RandomForest_Optimized")
 
         before = PREDICTION_COUNT.labels(status="success")._value.get()
         client = TestClient(app)
@@ -199,7 +202,7 @@ class TestModelPredictionServicePrometheusIntegration:
     def test_predict_success_observes_latency(self, monkeypatch):
         monkeypatch.setattr(model_service, "is_model_available", lambda: True)
         monkeypatch.setattr(model_service, "_model", _FakeModel())
-        monkeypatch.setattr(model_service, "_model_name", "RandomForest")
+        monkeypatch.setattr(model_service, "_model_name", "RandomForest_Optimized")
 
         before = PREDICTION_LATENCY._sum.get()
         client = TestClient(app)
@@ -211,14 +214,14 @@ class TestModelPredictionServicePrometheusIntegration:
     def test_predict_success_observes_prediction_value(self, monkeypatch):
         monkeypatch.setattr(model_service, "is_model_available", lambda: True)
         monkeypatch.setattr(model_service, "_model", _FakeModel())
-        monkeypatch.setattr(model_service, "_model_name", "RandomForest")
+        monkeypatch.setattr(model_service, "_model_name", "RandomForest_Optimized")
 
         before = PREDICTION_VALUE._sum.get()
         client = TestClient(app)
         client.get("/api/predict", params=self.VALID_PARAMS)
         after = PREDICTION_VALUE._sum.get()
 
-        assert after == pytest.approx(before +  7.0)
+        assert after == pytest.approx(before + 15.0)
 
     def test_predict_frequency_clipped_to_minimum_one(self, monkeypatch):
         class NegModel:
@@ -232,7 +235,23 @@ class TestModelPredictionServicePrometheusIntegration:
         client = TestClient(app)
         response = client.get("/api/predict", params=self.VALID_PARAMS)
         assert response.status_code == 200
-        assert response.json()["warning"] is None
+        assert response.json()["frequency_per_week"] >= 1.0
+
+    def test_predict_with_service_type_nuit(self, monkeypatch):
+        class NightModel:
+            def predict(self, X):
+                # NUIT doit avoir is_night=1
+                return np.array([8.0])
+
+        monkeypatch.setattr(model_service, "is_model_available", lambda: True)
+        monkeypatch.setattr(model_service, "_model", NightModel())
+        monkeypatch.setattr(model_service, "_model_name", "NightModel")
+
+        params = {**self.VALID_PARAMS, "service_type": "NUIT"}
+        client = TestClient(app)
+        response = client.get("/api/predict", params=params)
+        assert response.status_code == 200
+        assert response.json()["frequency_per_week"] == 8.0
 
 
 class TestPrometheusMiddlewareRoutesIntegration:
@@ -257,7 +276,7 @@ class TestPrometheusMiddlewareRoutesIntegration:
         )._value.get()
         client.get("/api/predict", params={
             "distance_km": 100, "duration_h": 1,
-            "train_type": "TGV", "traction": "Électrique"
+            "traction": "électrique", "service_type": "JOUR"
         })
         after = REQUEST_COUNT.labels(
             method="GET", endpoint="/api/predict", status_code=200
@@ -365,14 +384,14 @@ class TestModelServiceLifespanIntegration:
             assert response.status_code == 200
 
     def test_model_cache_populated_after_lifespan_with_model(self, monkeypatch):
-        artifact = {"model": _FakeModel(), "name": "IntegrationTest"}
+        artifact = {"model": _FakeModel(), "name": "RandomForest_Optimized"}
         with patch("main.init_db_pool", new_callable=AsyncMock), \
              patch("main.close_db_pool", new_callable=AsyncMock), \
              patch("os.path.exists", return_value=True), \
              patch("joblib.load", return_value=artifact):
             with TestClient(app):
                 assert model_service._model is not None
-                assert model_service._model_name == "IntegrationTest"
+                assert model_service._model_name == "RandomForest_Optimized"
 
     def test_predict_after_load_model_uses_cache(self, monkeypatch):
         monkeypatch.setattr(model_service, "_model", _FakeModel())
@@ -380,7 +399,7 @@ class TestModelServiceLifespanIntegration:
         monkeypatch.setattr(model_service, "is_model_available", lambda: True)
 
         with patch("joblib.load", side_effect=AssertionError("ne devrait pas charger")):
-            result = model_service.predict_co2(100, 1.0, 0, "Régional", "Diesel")
+            result = model_service.predict_frequency(100, 1.0, "JOUR", "électrique")
 
         assert result["warning"] is None
         assert result["model"] == "Cached"

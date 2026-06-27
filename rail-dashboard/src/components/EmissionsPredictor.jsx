@@ -6,15 +6,17 @@ const EmissionsPredictor = ({ apiUrl }) => {
     distance_km: '',
     duration_h: '',
     nb_stops: 0,
-    train_type: '',
-    traction: ''
+    train_type: 'Rail',
+    traction: '',
+    service_type: 'JOUR'
   })
   const [prediction, setPrediction] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const trainTypes = ['TGV', 'TER', 'Intercités', 'Eurostar', 'Thalys', 'RER', 'Transilien', 'ICE', 'Regional Train', 'High Speed Train']
-  const tractions = ['Électrique', 'Diesel', 'Bi-mode', 'Hydrogène']
+  const trainTypes = ['Rail', 'TGV', 'TER', 'Intercités', 'Eurostar', 'Thalys', 'RER', 'Transilien', 'ICE', 'Regional Train', 'High Speed Train']
+  const tractions = ['électrique', 'diesel', 'mixte']
+  const serviceTypes = ['JOUR', 'NUIT']
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -32,8 +34,9 @@ const EmissionsPredictor = ({ apiUrl }) => {
         distance_km: parseFloat(formData.distance_km),
         duration_h: parseFloat(formData.duration_h),
         nb_stops: parseInt(formData.nb_stops) || 0,
-        train_type: formData.train_type,
-        traction: formData.traction
+        train_type: formData.train_type || 'Rail',
+        traction: formData.traction,
+        service_type: formData.service_type || 'JOUR'
       }
 
       const response = await axios.get(`${apiUrl}/api/predict`, { params })
@@ -50,8 +53,9 @@ const EmissionsPredictor = ({ apiUrl }) => {
       distance_km: '',
       duration_h: '',
       nb_stops: 0,
-      train_type: '',
-      traction: ''
+      train_type: 'Rail',
+      traction: '',
+      service_type: 'JOUR'
     })
     setPrediction(null)
     setError('')
@@ -70,6 +74,7 @@ const EmissionsPredictor = ({ apiUrl }) => {
               onChange={handleChange}
               placeholder="Ex: 500"
               step="0.1"
+              min="0"
               required
               data-testid="predictor-distance"
             />
@@ -84,6 +89,7 @@ const EmissionsPredictor = ({ apiUrl }) => {
               onChange={handleChange}
               placeholder="Ex: 2.5"
               step="0.1"
+              min="0.1"
               required
               data-testid="predictor-duration"
             />
@@ -105,19 +111,18 @@ const EmissionsPredictor = ({ apiUrl }) => {
 
         <div className="form-row">
           <div className="form-group">
-            <label>Type de train *</label>
+            <label>Type de train</label>
             <select 
               name="train_type" 
               value={formData.train_type} 
-              onChange={handleChange} 
-              required
+              onChange={handleChange}
               data-testid="predictor-train-type"
             >
-              <option value="">Sélectionnez...</option>
               {trainTypes.map(type => (
                 <option key={type} value={type}>{type}</option>
               ))}
             </select>
+            <small className="field-hint">Ignoré par le modèle (conservé pour compatibilité)</small>
           </div>
 
           <div className="form-group">
@@ -136,24 +141,39 @@ const EmissionsPredictor = ({ apiUrl }) => {
             </select>
           </div>
 
-          <div className="form-actions">
-            <button 
-              type="submit" 
-              className="primary-button" 
-              disabled={loading}
-              data-testid="predict-submit"
+          <div className="form-group">
+            <label>Type de service *</label>
+            <select 
+              name="service_type" 
+              value={formData.service_type} 
+              onChange={handleChange} 
+              required
+              data-testid="predictor-service-type"
             >
-              {loading ? '🔮 Calcul en cours...' : '🔮 Prédire les émissions'}
-            </button>
-            <button 
-              type="button" 
-              className="secondary-button" 
-              onClick={handleReset}
-              data-testid="predict-reset"
-            >
-              Réinitialiser
-            </button>
+              {serviceTypes.map(type => (
+                <option key={type} value={type}>{type === 'JOUR' ? 'Jour' : 'Nuit'}</option>
+              ))}
+            </select>
           </div>
+        </div>
+
+        <div className="form-actions">
+          <button 
+            type="submit" 
+            className="primary-button" 
+            disabled={loading}
+            data-testid="predict-submit"
+          >
+            {loading ? '🔮 Calcul en cours...' : '🔮 Prédire la fréquentation'}
+          </button>
+          <button 
+            type="button" 
+            className="secondary-button" 
+            onClick={handleReset}
+            data-testid="predict-reset"
+          >
+            Réinitialiser
+          </button>
         </div>
       </form>
 
@@ -168,33 +188,29 @@ const EmissionsPredictor = ({ apiUrl }) => {
           <h3>📊 Résultat de la prédiction</h3>
           <div className="result-grid">
             <div className="result-item">
+              <span className="result-label">Fréquence prédite</span>
+              <span className="result-value highlight" data-testid="prediction-frequency">
+                {prediction.frequency_per_week?.toFixed(1) || 'N/A'} trains/semaine
+              </span>
+            </div>
+            <div className="result-item">
               <span className="result-label">Émissions par km</span>
               <span className="result-value" data-testid="prediction-perkm">
-                {prediction.emission_gco2e_pkm?.toFixed(2) || 'N/A'} g CO₂/km
+                {prediction.emission_gco2e_pkm?.toFixed(1) || 'N/A'} g CO₂/km
               </span>
             </div>
             <div className="result-item">
               <span className="result-label">Émissions totales</span>
-              <span className="result-value highlight" data-testid="prediction-total">
+              <span className="result-value" data-testid="prediction-total">
                 {prediction.total_emission_kgco2e?.toFixed(2) || 'N/A'} kg CO₂
               </span>
             </div>
-            {prediction.frequency_per_week && (
-              <div className="result-item">
-                <span className="result-label">Fréquence prédite</span>
-                <span className="result-value" data-testid="prediction-frequency">
-                  {prediction.frequency_per_week.toFixed(1)} trains/semaine
-                </span>
-              </div>
-            )}
-            {prediction.model && (
-              <div className="result-item">
-                <span className="result-label">Modèle IA</span>
-                <span className="result-value" data-testid="prediction-model">
-                  {prediction.model}
-                </span>
-              </div>
-            )}
+            <div className="result-item">
+              <span className="result-label">Modèle IA</span>
+              <span className="result-value" data-testid="prediction-model">
+                {prediction.model || 'N/A'}
+              </span>
+            </div>
             {prediction.warning && (
               <div className="result-item full-width">
                 <span className="result-label warning">⚠️ Attention</span>
@@ -205,7 +221,9 @@ const EmissionsPredictor = ({ apiUrl }) => {
             )}
           </div>
           <div className="result-comparison">
-            <small>Comparaison : Un trajet Paris-Lyon (465km) émet environ 4.7 kg CO₂ en TGV électrique</small>
+            <small>
+              💡 Comparaison : Un TGV Paris-Lyon (465km) émet environ 11.6 kg CO₂ et circule ~22 fois/semaine
+            </small>
           </div>
         </div>
       )}

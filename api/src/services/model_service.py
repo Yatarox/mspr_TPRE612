@@ -9,8 +9,12 @@ from middleware.prometheus import (
     PREDICTION_VALUE,
 )
 
-MODEL_PATH = "/app/models/frequency_model.joblib"
-ADEME_GCO2E_PKM = 1.7
+MODEL_PATH = "/app/models/frequency_model_best.joblib"
+ADEME_GCO2E_PKM = 25.0 
+
+NUM_FEATURES_EXTENDED = ["distance_km", "duration_h", "speed_kmh", "is_night", "distance_night"]
+CAT_FEATURES = ["service_type", "traction"]
+ALL_FEATURES = NUM_FEATURES_EXTENDED + CAT_FEATURES
 
 _model = None
 _model_name = None
@@ -34,7 +38,7 @@ def load_model():
         return
     artifact = joblib.load(MODEL_PATH)
     _model = artifact["model"]
-    _model_name = artifact.get("name", "RandomForest")
+    _model_name = artifact.get("name", "RandomForest_Optimized")
     print(f"[model_service] Modèle '{_model_name}' chargé en RAM depuis {MODEL_PATH}")
 
 
@@ -45,10 +49,27 @@ def get_model():
     return _model, _model_name
 
 
-def predict_co2(distance_km, duration_h, nb_stops, train_type, traction):
+def prepare_features(distance_km, duration_h, service_type, traction):
+    speed_kmh = distance_km / duration_h if duration_h > 0 else 0
+    is_night = 1 if service_type.upper() == "NUIT" else 0
+    distance_night = distance_km if is_night else 0
+    
+    return {
+        "distance_km": distance_km,
+        "duration_h": duration_h,
+        "speed_kmh": speed_kmh,
+        "is_night": is_night,
+        "distance_night": distance_night,
+        "service_type": service_type.upper(),
+        "traction": traction.lower()
+    }
+
+
+def predict_frequency(distance_km, duration_h, service_type="JOUR", traction="électrique"):
     if not is_model_available():
         PREDICTION_COUNT.labels(status="error").inc()
         return {
+            "frequency_per_week": None,
             "emission_gco2e_pkm": None,
             "total_emission_kgco2e": None,
             "model": None,
@@ -61,24 +82,18 @@ def predict_co2(distance_km, duration_h, nb_stops, train_type, traction):
         if model is None:
             PREDICTION_COUNT.labels(status="error").inc()
             return {
+                "frequency_per_week": None,
                 "emission_gco2e_pkm": None,
                 "total_emission_kgco2e": None,
                 "model": None,
                 "warning": "Modèle non disponible"
             }
 
-
-        features = {
-            "distance_km": distance_km,
-            "duration_h": duration_h,
-            "train_type": train_type,
-            "traction": traction,
-            "service_type": "JOUR",
-            "origin_country": "FR",
-            "destination_country": "FR",
-        }
-        df = pd.DataFrame([features])
+        features = prepare_features(distance_km, duration_h, service_type, traction)
+        df = pd.DataFrame([features])[ALL_FEATURES]
+        
         freq = float(np.clip(model.predict(df)[0], 1, None))
+        
         emission_gco2e_pkm = ADEME_GCO2E_PKM
         total_emission_kgco2e = emission_gco2e_pkm * distance_km / 1000
 
@@ -87,9 +102,9 @@ def predict_co2(distance_km, duration_h, nb_stops, train_type, traction):
         PREDICTION_VALUE.observe(freq)
 
         return {
-            "frequency_per_week": freq,
+            "frequency_per_week": round(freq, 1),
             "emission_gco2e_pkm": emission_gco2e_pkm,
-            "total_emission_kgco2e": total_emission_kgco2e,
+            "total_emission_kgco2e": round(total_emission_kgco2e, 2),
             "model": name,
             "warning": None
         }
@@ -102,3 +117,7 @@ def predict_co2(distance_km, duration_h, nb_stops, train_type, traction):
             "model": None,
             "warning": f"Erreur modèle : {exc}"
         }
+
+
+def predict_co2(distance_km, duration_h, nb_stops, train_type, traction):
+    return predict_frequency(distance_km, duration_h, "JOUR", traction)

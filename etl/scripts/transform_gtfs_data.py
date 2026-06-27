@@ -13,7 +13,7 @@ from concurrent.futures.process import BrokenProcessPool
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from transform_script.gtfs_helpers import read_csv, read_metadata, latest_version_dir, log_memory
+from transform_script.gtfs_helpers import read_csv, read_metadata, latest_version_dir, log_memory, _impute_missing_distances
 from transform_script.gtfs_frequency import build_frequency_map
 from transform_script.gtfs_geo import compute_distances, build_stop_country_map
 from transform_script.gtfs_processing import split_by_agency, _process_trips_chunk
@@ -170,6 +170,43 @@ def _sanitize_dataframe(df: pd.DataFrame, dataset_id: str) -> pd.DataFrame:
 
     return df
 
+def filter_rail_only(routes_df: pd.DataFrame, trips_df: pd.DataFrame, dataset_id: str) -> pd.DataFrame:
+    """
+    Filtre les trips pour ne garder que les lignes ferroviaires.
+    """
+    # Codes GTFS pour le rail
+    rail_types = [2, 100, 101, 102, 103, 105, 106, 107, 108, 109, 400]
+    
+    # ⭐ FORCER route_type en entier (certains CSV stockent des strings)
+    routes_df = routes_df.copy()
+    routes_df['route_type'] = pd.to_numeric(routes_df['route_type'], errors='coerce')
+    
+    # ⭐ Afficher les route_types disponibles pour debug
+    available_types = routes_df['route_type'].dropna().unique()
+    logger.info(f"📊 [{dataset_id}] Available route_types: {sorted(available_types)}")
+    
+    # Filtre sur route_type
+    valid_routes = routes_df[routes_df['route_type'].isin(rail_types)].copy()
+    
+    logger.info(f"📊 [{dataset_id}] Routes after rail filter: {len(valid_routes)} / {len(routes_df)}")
+    
+    if valid_routes.empty:
+        logger.warning(f"⚠️ [{dataset_id}] No rail routes found! Check route_type values.")
+        return pd.DataFrame(columns=trips_df.columns)  # retour vide
+    
+    # Ne garder que les trips dont la route est valide
+    trips_filtered = trips_df.merge(
+        valid_routes[['route_id']], 
+        on='route_id', 
+        how='inner'
+    )
+    
+    removed = len(trips_df) - len(trips_filtered)
+    logger.info(f"🚆 [{dataset_id}] Filtered out {removed} non-rail trips (kept {len(trips_filtered)})")
+    
+    return trips_filtered
+
+
 
 def _write_csv(rows: List[Dict], out_csv: Path) -> None:
     if not rows:
@@ -300,7 +337,13 @@ def build_trips_summary_for_dataset(staging_dir: str, dataset_id: str, processed
         # Merge avec seulement les colonnes utiles de routes
         route_cols = ["route_id", "route_short_name", "route_long_name", "route_type", "agency_id"]
         route_cols = [c for c in route_cols if c in routes_df.columns]
-        trips = trips.merge(routes_df[route_cols], on="route_id", how="left", suffixes=("", "_route"))
+        trips = trips.merge(routes_df[route_cols], on="route_id", how="inner", suffixes=("", "_route"))
+        trips = filter_rail_only(routes_df, trips, dataset_id)
+        if trips.empty:
+            logger.warning(f"⚠️ [{dataset_id}] No rail trips found after filtering")
+            return 0, ""
+        
+
         trips["route_agency_id"] = trips.get("agency_id", "ERROR")
         del routes_df
         gc.collect()
@@ -376,6 +419,7 @@ def build_trips_summary_for_dataset(staging_dir: str, dataset_id: str, processed
 
         df_final = pd.DataFrame(all_rows)
         df_final = _sanitize_dataframe(df_final, dataset_id)
+        df_final = _impute_missing_distances(df_final, dataset_id)
 
         if df_final.empty:
             logger.warning(f"⚠️ No valid rows after sanitization for dataset {dataset_id}")
