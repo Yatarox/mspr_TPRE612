@@ -8,7 +8,6 @@ GTFS_FILES = [
 ]
 
 def calculate_file_hash(filepath: str) -> str:
-    # Strong non-cryptographic-integrity hash (preferred over MD5 for scanners/policies)
     hash_sha256 = hashlib.sha256()
     with open(filepath, "rb") as f:
         for chunk in iter(lambda: f.read(4096), b""):

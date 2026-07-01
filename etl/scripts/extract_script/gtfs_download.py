@@ -20,7 +20,6 @@ def download_file(url: str, output_path: str, force_download: bool = False) -> O
         response.raise_for_status()
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-        # Use SHA-256 instead of MD5 to avoid security hotspot
         hash_sha256 = hashlib.sha256()
 
         with open(output_path, 'wb') as f:

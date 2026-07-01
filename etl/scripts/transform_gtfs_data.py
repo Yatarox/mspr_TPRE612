@@ -468,9 +468,6 @@ def transform_gtfs(staging_dir: str, processed_dir: str, max_workers: int = 4, s
         logger.info("✅ All datasets already processed")
         return [str(p) for p in Path(processed_dir).glob("*/trips_summary_*.csv")]
 
-    # FIXME: max_workers forcé à 1 pour éviter l'OOM
-    # Deux datasets lourds en parallèle saturent la RAM disponible.
-    # Repasser à 2 uniquement si la machine a >16GB de RAM libre.
     safe_workers = 2
     total = len(datasets)
     logger.info(f"🚀 Starting transform for {total} datasets (max_workers={safe_workers})")

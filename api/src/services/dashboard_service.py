@@ -227,5 +227,3 @@ async def get_stats_by_service_type():
     """
     return await execute_query(query)
 
-# ...existing code...
-
